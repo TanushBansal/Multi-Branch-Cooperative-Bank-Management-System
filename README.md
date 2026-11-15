@@ -1,239 +1,241 @@
 # Multi-Branch Cooperative Bank Management System
 
-DBIS Lab (CS257) project. A relational database system for a multi-branch cooperative bank, covering customer and account management, branch and employee management, atomic and concurrency-safe transaction processing, a loan lifecycle with guarantors and EMI schedules, and reporting.
+A MySQL database project for **CS257 — Database and Information Systems Lab**.
+It models banking across multiple branches, with transaction-safe financial
+operations, a loan workflow, and SQL reporting. A local web app lets you perform
+operations and refresh the tables to see their effects.
 
-Problem statement: https://drive.google.com/file/d/1O-rlJTe_RvUfFdJQnFa5k7VxSm0PuZpK/view?usp=drive_link
+## Features
 
-## Requirements
+| Area | Supported functionality |
+| --- | --- |
+| Accounts | Savings, Current, and Fixed Deposit account opening; joint ownership; nominees; account states and subtype-specific terms |
+| Banking | Deposits, withdrawals, and intra-/inter-branch transfers within the same bank |
+| Loans | Applications, guarantor linkage, approval/rejection, disbursement, monthly installments, repayment allocation, and closure |
+| Reporting | Account/customer statements, transaction history, branch summaries, staffing, loan portfolios, and pending applications |
+| Integrity | Primary/foreign keys, domain checks, composite references, chronology checks, and transactional balance updates |
+| Concurrency | Row locking, concurrent-operation tests, and a separate lost-update experiment |
 
-MySQL 8.0.16 or later (CHECK constraints are enforced from this version).
+The schema contains **21 base tables**. Sample data covers three branches, all account
+types, joint accounts, nominees, and loans at different lifecycle stages.
 
-## Building the database
+## Prerequisites
 
-From the repository root:
+- **MySQL Server 8.0.16+**, running locally with InnoDB support.
+- **MySQL command-line client** (`mysql`).
+- **Python 3.9+** for the demo server and automated tests.
+- A modern browser for the demo.
 
-    ./scripts/reset_db.sh      # drops and recreates the CooperativeBank database
-    ./scripts/run_all.sh       # runs database/01 to 07 in numeric order
+The app uses Python's standard library and plain HTML, CSS, and JavaScript.
+No `pip install`, `npm install`, or frontend build step is needed. Node.js is optional
+and used only for JavaScript syntax checks.
 
-Set MYSQL_USER, MYSQL_PASSWORD (optional) and MYSQL_HOST (optional) in the environment, or edit the variables at the top of each script.
+Run commands from the repository root. Examples below use PowerShell on Windows.
+Demo scripts find `mysql` on PATH or use the standard MySQL Server 8.0 Windows path.
 
-## Repository layout
+## Quick start
 
-    docs/                    Proposal, problem statement, ER diagram, UML, normalization, report
-    database/                Numbered SQL files, executed in order
-      01_schema.sql            Tables and base constraints
-      02_account_opening.sql   Atomic account-opening procedures
-      02_constraints_triggers.sql   Additional constraints and triggers
-      02_loan_dates.sql        Loan event chronology checks and triggers
-      03_seed_data.sql         Demonstration dataset
-      04_transactions.sql      Deposit, withdrawal, transfer procedures
-      05_loans.sql             Loan application, approval, disbursal, EMI, repayment
-      06_views.sql             Reporting views
-      07_indexes.sql           Indexes (kept separate for before/after comparison)
-    experiments/             Self-contained experiments, not part of the core build
-      concurrency/             Lost-update anomaly and its resolution
-      indexing/                Bulk data generator and timing comparison
-      query_optimization/      Slow queries, rewrites and EXPLAIN output
-    scripts/                 Helper scripts to reset and build the database
-    tests/                   Smoke tests (balance reconciliation, constraint checks)
+### 1. Configure MySQL access
 
-## Demonstration data
+Save a login once, entering your MySQL password when prompted:
 
-`database/03_seed_data.sql` populates all 21 tables with fictional data as of
-2026-11-15. Load it once after the schema and constraints/triggers on empty tables:
-
-    mysql --login-path=local --execute="source database/03_seed_data.sql"
-
-The data includes three branches, joint accounts, nominees, every account type,
-active/frozen/closed accounts, intra-/inter-branch transfers, and approved,
-rejected, and pending applications. Loans demonstrate active, closed, sanctioned,
-and defaulted states, with EMI schedules and partial/multi-installment repayments.
-Balances reconcile with successful transaction history; pending and failed
-attempts do not affect balances. The file uses plain INSERT statements in dependency
-order. If an insert fails, earlier successful inserts remain in the database.
-Do not rerun it to add more data: its fixed demonstration IDs are intentionally unique.
-
-Validate the data in a disposable database with the same test environment settings
-described below:
-
-    python -m unittest discover -s tests -p test_seed_data.py -v
-
-## Loan event dates
-
-Load 02_loan_dates.sql after the schema and other constraints (run_all.sh includes
-it automatically). Decisions cannot precede applications, sanctions cannot precede
-approval, and disbursements cannot precede sanction. Installment due dates must be
-after the disbursement day, or after sanction for a schedule prepared before funding.
-Repayment PaidAt and its financial transaction date cannot precede funding (or
-sanction when undisbursed). Eligibility of undisbursed loans for repayment remains
-a separate workflow rule.
-
-DATE fields are compared by calendar day; repayment timestamps use the exact
-funding time. Linked disbursement/repayment transaction timestamps become immutable.
-Changing a sanction, decision, funding reference, installment, or repayment is also
-checked against existing dependent events using locking reads. Deadlocks can require
-retrying a complete transaction. Monthly schedule generation is separate from these
-date checks; the in-progress 05_loans.sql has not been changed.
-
-## Loan approval guarantors
-
-Create an application as PENDING, insert its ApplicationGuarantor links, then
-update Status to APPROVED together with ReviewedBy and DecisionDate. The approval
-trigger chooses ApprovalGuarantorID automatically. Its composite foreign key
-requires that designated guarantor to remain linked to the same application.
-Direct APPROVED inserts are rejected because the application must exist before
-guarantor links can be created. The seed script follows this order using plain SQL.
-
-Deleting or moving a designated link automatically selects another linked guarantor;
-removing the last link is rejected. To replace a sole guarantor, insert the new link
-first, then remove the old one. Locks and the designation FK protect concurrent
-approval, deletion, and reassignment. Deadlocks or stale-snapshot FK failures may
-require retrying the complete transaction; they cannot leave an approved application
-without a guarantor. Administrative seed-validation tests exclude the independent,
-in-progress demonstration code in 05_loans.sql.
-
-## Loan transaction references
-
-Loan sanctions cannot exceed the application's RequestedAmount. Triggers in
-02_constraints_triggers.sql validate inserts, amount changes, and application
-reassignment; application updates cannot lower the request below an existing
-sanction. Equality is allowed. Locking reads protect simultaneous changes;
-deadlocks may require retrying a complete transaction.
-
-`Loan.ApplicationStatus` defaults to APPROVED and is fixed by a CHECK. A composite
-foreign key requires its application to actually be approved, and prevents changing
-the application to PENDING or REJECTED while a loan references it. Existing loan
-inserts can omit the defaulted ApplicationStatus field.
-
-A disbursed Loan references a successful LOAN_DISBURSEMENT transaction with the
-same payout account and sanction amount. Set DisbursementTransactionID,
-DisbursementTransactionType='LOAN_DISBURSEMENT', and
-DisbursementTransactionStatus='SUCCESS' together when moving beyond SANCTIONED.
-All three fields must be NULL while the loan remains SANCTIONED. Composite foreign
-keys block later changes to the referenced transaction's account, amount, type, or status.
-
-Repayment.TransactionType and TransactionStatus default to LOAN_REPAYMENT and
-SUCCESS and are fixed by checks. Its composite foreign key also requires the
-repayment amount to match the transaction amount. Existing repayment inserts can
-omit the two defaulted fields. These constraints validate transaction links; loan
-disbursal and repayment workflows will be implemented in 05_loans.sql.
-
-`PaymentAllocation.LoanID` is required and must match both its repayment's loan
-and its installment's loan. Composite foreign keys protect these relationships
-on inserts and updates, including moves of the referenced repayment or installment.
-This rule validates loan membership; allocation totals are a separate constraint.
-
-## Employee roles
-
-`Employee.EmployeeRole` is MANAGER, CLERK, or NULL for an employee with neither
-specialization. Set the parent role before inserting into Manager or Clerk; their
-role columns default to the corresponding fixed value. Composite foreign keys
-and checks prevent mismatched roles on inserts and updates, including concurrent
-writes. A referenced employee's role cannot change until its existing subtype row
-is removed (and removing that row may be blocked by existing loan-review references).
-Employees are not required to have a subtype row: this specialization remains partial.
-
-## Account opening
-
-`02_account_opening.sql` creates each account together with its matching subtype
-and first holder in one transaction. A positive opening amount also creates a
-successful deposit record. Zero opening amounts are allowed for Savings/Current
-accounts with a zero minimum balance. Fixed deposits require positive principal.
-
-```sql
-CALL OpenSavingsAccount(5001, 1, 1, '2026-11-15', 4.00, 1000.00, 5000.00, 'open-5001');
-CALL OpenCurrentAccount(5002, 1, 1, '2026-11-15', 5000.00, 10000.00, 'open-5002');
-CALL OpenFixedDeposit(5003, 1, 1, '2026-11-15', '2027-11-15', 25000.00, 6.50, 'open-5003');
+```powershell
+mysql_config_editor set --login-path=local --host=127.0.0.1 --user=root --password
+mysql --login-path=local --execute="SELECT VERSION();"
 ```
 
-Arguments start with account number, branch ID, and customer ID. Savings then takes
-opening date, annual interest rate, minimum balance, opening amount, and RequestID.
-Current omits the interest rate. Fixed Deposit takes start date, maturity date,
-principal, annual interest rate, and RequestID. Use existing branches/customers and
-new account numbers. Call outside an existing transaction. Accounts are retained
-when closed: subtype deletion and reassignment are blocked by triggers in script 02.
+If the executables are not on PATH, use their full paths from your MySQL `bin`
+directory. The saved login avoids repeated password prompts and stays outside the
+repository. Alternatively, add `--password` to the Python setup/server commands
+below to enter the password once per process.
 
-For application access, an administrator can run `scripts/account_access.sql`
-after the full build. It creates `cooperative_account_operator`, granting read access
-to account records and execution of the opening/transaction procedures, without
-direct INSERT, UPDATE, DELETE, or TRUNCATE privileges on the account tables.
-Assign it to a dedicated existing application user:
+### 2. Create the presentation database — once
 
-```sql
-GRANT 'cooperative_account_operator' TO 'bank_app'@'localhost';
-SET DEFAULT ROLE 'cooperative_account_operator' TO 'bank_app'@'localhost';
+```powershell
+python demo-app/setup_demo.py
 ```
 
-Replace the user/host with your actual dedicated account. It must have no broader
-table/global write grants or other roles granting them. This setup does not create
-or change a real application user automatically. Root retains administrative access
-and can still insert incomplete accounts directly; use it for the plain seed import
-and validate the resulting data. Total specialization is guaranteed through the
-restricted account-opening interface, rather than by unrestricted table inserts.
+This creates **CooperativeBankDemo**, loads sample data, and installs the schema,
+constraints, banking procedures, loan procedures, reporting views, and indexes. It does not
+change an existing `CooperativeBank` database or overwrite an existing demo database.
 
-Account-opening tests also create/drop a random test user and role, requiring those
-administrative permissions as well as disposable-database access:
+If the demo database already exists, skip setup. For a fresh dataset under a new name:
 
-    python -m unittest discover -s tests -p test_account_opening.py -v
-
-## Transaction procedures
-
-`database/04_transactions.sql` creates `Deposit`, `Withdraw`, and `Transfer`.
-For an existing database with the schema and triggers loaded, install this file once:
-
-    mysql --login-path=local --execute="source database/04_transactions.sql"
-
-Run these examples in MySQL, replacing account numbers with existing accounts:
-
-```sql
-USE CooperativeBank;
-CALL Deposit(1001, 500.00, 'BRANCH', 'deposit-001', @TransactionID);
-SELECT @TransactionID;
-CALL Withdraw(1001, 100.00, 'ATM', 'withdrawal-001', @TransactionID);
-SELECT @TransactionID;
-CALL Transfer(1001, 2001, 250.00, 'ONLINE', 'transfer-001', @TransactionID);
-SELECT @TransactionID;
+```powershell
+python demo-app/setup_demo.py --name CooperativeBankDemo2
 ```
 
-Each call commits its own transaction and must run outside an existing transaction.
-Use a new RequestID for each operation. Reusing a RequestID raises a duplicate-key
-error without moving funds again. Failed calls roll back balance changes and log
-rows together; successful calls return their TransactionID through the OUT parameter.
-Deadlocks and lock timeouts also roll back the call and can be retried by the caller.
+### 3. Start the app
 
-Amounts must be positive, fit DECIMAL(15,2), and contain whole cents. Both transfer
-accounts must be active and belong to the same bank; transfers can cross branches.
-Withdrawals and transfers preserve the source account's minimum balance. These
-ordinary operations support Savings and Current accounts; FD funding, maturity,
-and closure require a separate workflow. Concurrent calls use row locks, with
-transfer accounts locked in ascending account-number order.
-
-`TransferDetails.TransactionType` defaults to TRANSFER and is fixed by a CHECK.
-Its composite foreign key to BankTransaction prevents links to other transaction
-types, including later changes to either side. Existing inserts can omit this column.
-Deletion or reassignment of transfer details (transaction, source, or destination)
-is blocked. Application transfers must use the Transfer procedure and the restricted
-role; administrators importing records directly should check:
-
-```sql
-SELECT * FROM v_transfer_integrity_violations;
+```powershell
+python demo-app/server.py --database CooperativeBankDemo
 ```
 
-This view from 06_views.sql must return no rows after import. It covers transfers
-in every status. The view detects omissions; it does not reject incomplete direct
-administrative inserts. Root retains administrative privileges, including TRUNCATE.
+Open **http://127.0.0.1:8080**. Keep the terminal running; press **Ctrl+C** to stop.
+Always pass the intended database: the server's default is `CooperativeBank`.
 
-Integration tests create and remove a uniquely named disposable database, load
-the real schema/triggers/procedures, and exercise rollback and concurrent sessions:
+Choose **Banking** or **Loans**, select an operation, complete its form, and click
+**Run operation**. Select a table and press **Refresh** to see the results. Changed
+cells and new rows are highlighted on previously viewed pages. Tables display
+50 rows per page.
 
-    python -m unittest discover -s tests -p test_transactions.py -v
+## Presentation walkthrough
 
-Tests require Python 3.9+ and the MySQL CLI on PATH (or `MYSQL_TEST_CLIENT` set to
-its executable path). Set `MYSQL_TEST_HOST`, `MYSQL_TEST_PORT`, and `MYSQL_TEST_USER`
-if different from 127.0.0.1, 3306, and root. Supply credentials through the client's
-existing login configuration or `MYSQL_PWD`. The test user needs permission to
-create and drop the disposable database. Tests do not alter CooperativeBank.
+Use these seeded IDs in a newly created demo database:
+
+| Step | Operation | Tables to inspect after Refresh |
+| --- | --- | --- |
+| 1 | Deposit `500` into account `1001`, channel `BRANCH` | Account, BankTransaction |
+| 2 | Transfer `250` from `1001` to `2001`, channel `ONLINE` | Account, BankTransaction, TransferDetails |
+| 3 | Try withdrawing more than the available funds | Verify the error and unchanged balances/ledger |
+| 4 | Apply for a PERSONAL loan: customer `1`, branch `1`, amount `10000`, purpose `Home renovation` | LoanApplication; note the returned application ID |
+| 5 | Link guarantor `1` to that application, then approve using manager `1` | ApplicationGuarantor, LoanApplication |
+| 6 | Disburse to account `1001`, annual interest `12`, tenure `3` months | Account, BankTransaction, Loan; note the returned loan ID |
+| 7 | Generate installments using that loan ID | LoanInstallment |
+| 8 | Repay `500` against that loan | Account, BankTransaction, Repayment, PaymentAllocation |
+
+The interface generates banking RequestIDs. Reusing one is rejected without moving
+funds again. Use a new application for another loan demonstration; an application
+cannot be disbursed twice.
+
+To inspect reports, connect to the demo database:
+
+```powershell
+mysql --login-path=local CooperativeBankDemo
+```
+
+```sql
+SELECT * FROM v_branch_account_summary;
+SELECT * FROM v_account_statement
+WHERE AccountNo = 1001
+ORDER BY TransactionDate, TransactionID;
+SELECT * FROM v_loan_portfolio;
+SELECT * FROM v_pending_applications;
+```
+
+The explorer groups its dropdown into Tables and Reports and audit views. Choose a
+report and press Refresh to inspect statements, summaries, staffing, and portfolios.
+The SQL queries above provide the same reports directly.
+
+## Updating loan procedures
+
+After changing `database/05_loans.sql`, update the existing demo database:
+
+```powershell
+python demo-app/install_loans.py --database CooperativeBankDemo
+```
+
+This replaces installed loan routines without resetting table data. Restart the
+server after backend code changes, then reload the browser.
+
+To refresh loan routines, reporting views, and indexes together in an existing demo:
+
+```powershell
+python demo-app/setup_demo.py --update --name CooperativeBankDemo
+```
+
+This retains table records and skips indexes already installed with matching columns.
+It does not migrate table definitions or reload sample data. For schema changes,
+create a fresh demo database under a new name or prepare an explicit migration.
+
+Loan procedures are installed directly from `database/05_loans.sql`, with no SQL
+compatibility rewrites. The demo also installs `LinkLoanGuarantor` for its guarantor
+form. `scripts/run_all.sh` builds the numbered SQL files for `CooperativeBank`; the
+Python setup chooses a separate presentation database and adds that demo helper.
+
+## Tests
+
+Tests need MySQL credentials with permission to create and drop disposable databases.
+Account-opening access tests also create and remove temporary users and roles.
+They use generated database names rather than resetting the project database.
+
+Run the demo unit checks and real MySQL/HTTP integration check:
+
+```powershell
+python -B -m unittest discover -s demo-app -p "test_*.py" -v
+python -B demo-app/check_integration.py
+```
+
+The integration check covers banking, the loan lifecycle through closure, rejected
+operations, table/report endpoints, reporting consistency, installed indexes, and repeatable updates. It currently uses the standard MySQL 8.0 Windows
+client path and the `local` login path.
+
+Run the core schema, constraints, seed, and banking tests:
+
+```powershell
+python -B -m unittest discover -s tests -p "test_*.py" -v
+```
+
+Core tests use `mysql` on PATH, or the `MYSQL_TEST_CLIENT` executable path.
+Connection defaults are `127.0.0.1:3306`, user `root`. Override them with
+`MYSQL_TEST_HOST`, `MYSQL_TEST_PORT`, and `MYSQL_TEST_USER`. Credentials come from
+the client's login configuration or `MYSQL_PWD`. The seed suite excludes the raw
+loan file, so these tests do not establish that the full numbered build works.
+
+Additional checks:
+
+- [Reporting checks](tests/report_views_checks.sql) compare statements and summary
+  totals. The script targets `CooperativeBank`; select the intended database when
+  adapting it for the demo.
+- [Concurrency experiment](experiments/concurrency/README.md) provides two-session
+  demonstrations of lost updates, row locking, and SERIALIZABLE isolation.
+- `node --check demo-app/app.js` checks JavaScript syntax if Node is installed.
+
+## Repository guide
+
+```text
+database/
+  01_schema.sql                 Tables, keys, and domain checks
+  02_account_opening.sql        Atomic account-opening procedures
+  02_constraints_triggers.sql   Additional business rules
+  02_loan_dates.sql             Loan event chronology
+  03_seed_data.sql              Representative sample records
+  04_transactions.sql          Deposit, withdrawal, and transfer
+  05_loans.sql                 Loan lifecycle procedures
+  06_views.sql                 Reporting and integrity views
+  07_indexes.sql               Transaction date and account/date indexes
+demo-app/                     Frontend, Python server, setup, and tests
+docs/                         Proposal, problem statement, ER, and design documents
+experiments/concurrency/       Lost-update and locking/isolation demonstrations
+scripts/                      Bash build/reset helpers and account-access grants
+tests/                        Core integration tests and SQL reporting checks
+```
+
+## Design documents
+
+- [Problem statement](docs/DBIS_problem_statement.pdf)
+- [Project proposal](docs/DBIS_proposal.pdf)
+- [Requirements specification](docs/requirements.md)
+- [ER diagram](docs/er/ER_Diagram.pdf)
+- [Normalization and functional dependencies](docs/normalization.md)
+- [Detailed demo instructions](demo-app/README.md)
+
+## Current limits and remaining work
+
+- Complete CRUD demonstrations, remaining integrity cases, and access grants for
+  the whole application. The existing `cooperative_account_operator` role covers
+  account/banking operations, not the full demo.
+- Update the ER diagram for nominees and add the UML class diagram.
+- Measure the performance impact of the implemented indexes and complete query-
+  optimization case studies. Index definitions exist; benchmark results are still needed.
+- Capture actual concurrency experiment outputs and assemble the final report.
+
+Ordinary deposits, withdrawals, and transfers support Savings and Current accounts.
+FD maturity and closure require a separate workflow. Loan approval requires a linked
+guarantor and a manager from the receiving branch; repayment requires an unpaid schedule.
+
+The app is a local academic demo that runs real financial procedures against the
+selected database. Use the separate presentation dataset for experiments. Sample
+records have fixed IDs and should be loaded only once into empty tables.
+
+The Bash helper `scripts/reset_db.sh` explicitly **drops and recreates CooperativeBank**,
+deleting its data. It is unnecessary for the quick-start demo setup.
 
 ## Team
 
-Eklavya (250001028), Tanush Bansal (250001071), Chetan Yogbharti (250001023), Parth Kalia (250001054)
+| Member | Roll number |
+| --- | --- |
+| Eklavya | 250001028 |
+| Tanush Bansal | 250001071 |
+| Chetan Yogbharti | 250001023 |
+| Parth Kalia | 250001054 |

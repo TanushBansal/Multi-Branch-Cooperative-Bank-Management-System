@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Cooperative / Banking demo</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <aside>
+      <a class="brand" href="/"
+        >CB<span>Cooperative<span class="subbrand">BANKING CONSOLE</span></span></a
+      >
+      <div class="nav-caption">WORKSPACE</div>
+      <nav aria-label="Sections">
+        <button class="selected" data-section="Banking">01 <span>Banking</span></button
+        ><button data-section="Loans">02 <span>Loans</span></button>
+      </nav>
+      <div class="sidebar-foot">DBIS PROJECT<span>Multi-branch cooperative bank</span></div>
+    </aside>
+    <main>
+      <header>
+        <span>Presentation workspace</span><span id="connection" class="badge">Connecting…</span>
+      </header>
+      <div class="page-heading">
+        <div>
+          <div class="eyebrow">OPERATIONS / <span id="section-label">BANKING</span></div>
+          <h1 id="heading">Everyday banking</h1>
+          <p id="description">Perform an operation. Refresh the tables to see what changed.</p>
+        </div>
+        <span class="db-label" id="database">MySQL</span>
+      </div>
+      <div class="workspace">
+        <section class="operation-panel">
+          <div class="panel-heading">
+            <span class="square">↗</span>
+            <div>
+              <h2>New operation</h2>
+              <p>Run a stored procedure</p>
+            </div>
+          </div>
+          <label for="operation">Operation</label
+          ><select id="operation"></select>
+          <p class="procedure-note" id="availability"></p>
+          <form id="operation-form">
+            <div id="fields"></div>
+            <button class="primary" id="run" type="submit">Run operation <span>→</span></button>
+          </form>
+          <div id="result" role="status" aria-live="polite">Choose an operation to begin.</div>
+          <div id="pending" hidden>
+            <h3>Loan lifecycle</h3>
+            <p>Approval / rejection · Disbursement · EMI generation · Repayment</p>
+            <span>Pending procedure implementation</span>
+          </div>
+        </section>
+        <section class="data-panel">
+          <div class="data-toolbar">
+            <div>
+              <h2>Table explorer</h2>
+              <p id="refresh-time">Live database records</p>
+            </div>
+            <button id="refresh">↻ Refresh</button>
+          </div>
+          <div class="table-controls">
+            <label for="table">Table</label
+            ><select id="table"></select
+            ><span id="row-count"></span>
+          </div>
+          <p id="table-status" role="status" aria-live="polite"></p>
+          <div class="table-scroll">
+            <table>
+              <thead id="table-head"></thead>
+              <tbody id="table-body"></tbody>
+            </table>
+          </div>
+          <footer class="table-footer">
+            <span>Changed cells are highlighted after refresh.</span>
+            <div>
+              <button id="previous" aria-label="Previous page">←</button
+              ><span id="page-label">Page 1</span
+              ><button id="next" aria-label="Next page">→</button>
+            </div>
+          </footer>
+        </section>
+      </div>
+      <footer class="page-footer">
+        <span>COOPERATIVE BANK / DEMO CONSOLE</span
+        ><span>Operations execute against the selected MySQL database.</span>
+      </footer>
+    </main>
+  </body>
+</html>

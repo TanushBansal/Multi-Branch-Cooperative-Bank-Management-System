@@ -12,197 +12,6 @@
 
 USE CooperativeBank;
 
--- PART 1: LOAN MODULE DEMONSTRATION DATASET
-
-SET @demo_bank_id = NULL;
-SET @demo_branch_id = NULL;
-SET @demo_employee_id = NULL;
-SET @demo_customer_id = NULL;
-SET @demo_guarantor_id = NULL;
-
-
--- 1. Create demo bank if it does not exist
-
-SELECT BankID INTO @demo_bank_id
-FROM Bank
-WHERE BankName = 'Demo Cooperative Bank'
-LIMIT 1;
-
-INSERT INTO Bank (BankName)
-SELECT 'Demo Cooperative Bank'
-WHERE @demo_bank_id IS NULL;
-
-SET @demo_bank_id = IFNULL(@demo_bank_id, LAST_INSERT_ID());
-
-
--- 2. Create demo branch if it does not exist
-
-SELECT BranchID INTO @demo_branch_id
-FROM Branch
-WHERE IFSC = 'DEMO0IND001'
-LIMIT 1;
-
-INSERT INTO Branch
-(BankID, IFSC, BranchName, Address)
-SELECT
-    @demo_bank_id,
-    'DEMO0IND001',
-    'Indore Main Branch',
-    'Vijay Nagar, Indore, Madhya Pradesh'
-WHERE @demo_branch_id IS NULL;
-
-SET @demo_branch_id = IFNULL(@demo_branch_id, LAST_INSERT_ID());
-
-
--- 3. Create demo employee if it does not exist
-
-SELECT EmployeeID INTO @demo_employee_id
-FROM Employee
-WHERE Email = 'rahul.demo@bank.com'
-LIMIT 1;
-
-INSERT INTO Employee
-(BranchID, EmployeeName, Phone, Email)
-SELECT
-    @demo_branch_id,
-    'Rahul Sharma',
-    '9876500001',
-    'rahul.demo@bank.com'
-WHERE @demo_employee_id IS NULL;
-
-SET @demo_employee_id = IFNULL(@demo_employee_id, LAST_INSERT_ID());
-
-
--- 4. Make employee a manager if not already a manager
-
-INSERT INTO Manager (EmployeeID)
-SELECT @demo_employee_id
-WHERE NOT EXISTS (
-    SELECT 1
-    FROM Manager
-    WHERE EmployeeID = @demo_employee_id
-);
-
-
--- 5. Create demo customer if it does not exist
-
-SELECT CustomerID INTO @demo_customer_id
-FROM Customer
-WHERE PAN = 'ABCDE1234F'
-LIMIT 1;
-
-INSERT INTO Customer
-(CustomerName, Phone, Email, PAN, Address)
-SELECT
-    'Aman Verma',
-    '9876500002',
-    'aman.demo@gmail.com',
-    'ABCDE1234F',
-    'Indore, Madhya Pradesh'
-WHERE @demo_customer_id IS NULL;
-
-SET @demo_customer_id = IFNULL(@demo_customer_id, LAST_INSERT_ID());
-
-
--- 6. Create customer savings account if it does not exist
-
-INSERT INTO Account
-(AccountNo, BranchID, AccountType, Balance, Status, OpenedOn)
-SELECT
-    9001000001,
-    @demo_branch_id,
-    'SAVINGS',
-    500000.00,
-    'ACTIVE',
-    '2026-01-01'
-WHERE NOT EXISTS (
-    SELECT 1
-    FROM Account
-    WHERE AccountNo = 9001000001
-);
-
-
--- 7. Connect customer with account if not already connected
-
-INSERT INTO AccountHolder (CustomerID, AccountNo)
-SELECT @demo_customer_id, 9001000001
-WHERE NOT EXISTS (
-    SELECT 1
-    FROM AccountHolder
-    WHERE CustomerID = @demo_customer_id
-    AND AccountNo = 9001000001
-);
-
-
--- 8. Create savings account details if missing
-
-INSERT INTO SavingsAccount
-(AccountNo, InterestRate, MinimumBalance)
-SELECT
-    9001000001,
-    4.00,
-    1000.00
-WHERE NOT EXISTS (
-    SELECT 1
-    FROM SavingsAccount
-    WHERE AccountNo = 9001000001
-);
-
-
--- 9. Create demo guarantor if it does not exist
-
-SELECT GuarantorID INTO @demo_guarantor_id
-FROM Guarantor
-WHERE PAN = 'FGHIJ5678K'
-LIMIT 1;
-
-INSERT INTO Guarantor
-(GuarantorName, Phone, PAN, Address)
-SELECT
-    'Rohan Mehta',
-    '9876500003',
-    'FGHIJ5678K',
-    'Indore, Madhya Pradesh'
-WHERE @demo_guarantor_id IS NULL;
-
-SET @demo_guarantor_id = IFNULL(@demo_guarantor_id, LAST_INSERT_ID());
-
-
--- PART 2: VERIFY DEMONSTRATION DATASET
-
-SELECT * FROM Bank
-WHERE BankID = @demo_bank_id;
-
-SELECT * FROM Branch
-WHERE BranchID = @demo_branch_id;
-
-SELECT E.*, M.EmployeeID AS ManagerID
-FROM Employee E
-JOIN Manager M ON E.EmployeeID = M.EmployeeID
-WHERE E.EmployeeID = @demo_employee_id;
-
-SELECT
-    C.CustomerID,
-    C.CustomerName,
-    C.PAN,
-    A.AccountNo,
-    A.AccountType,
-    A.Balance,
-    A.Status,
-    S.InterestRate,
-    S.MinimumBalance
-FROM Customer C
-JOIN AccountHolder AH ON C.CustomerID = AH.CustomerID
-JOIN Account A ON AH.AccountNo = A.AccountNo
-JOIN SavingsAccount S ON A.AccountNo = S.AccountNo
-WHERE C.CustomerID = @demo_customer_id;
-
-SELECT * FROM Guarantor
-WHERE GuarantorID = @demo_guarantor_id;
-
--- PART 3: LOAN PROCEDURES
-
-
 -- PROCEDURE 1: APPLY FOR A LOAN
 
 DROP PROCEDURE IF EXISTS ApplyLoan;
@@ -529,7 +338,9 @@ BEGIN
         InterestRate,
         TenureMonths,
         Status,
-        DisbursementTransactionID
+        DisbursementTransactionID,
+        DisbursementTransactionType,
+        DisbursementTransactionStatus
     )
     VALUES
     (
@@ -540,7 +351,9 @@ BEGIN
         p_interest_rate,
         p_tenure_months,
         'ACTIVE',
-        v_transaction_id
+        v_transaction_id,
+        'LOAN_DISBURSEMENT',
+        'SUCCESS'
     );
 
     SET v_loan_id = LAST_INSERT_ID();
@@ -908,12 +721,14 @@ BEGIN
             (
                 PaymentID,
                 InstallmentID,
+                LoanID,
                 AllocatedAmount
             )
             VALUES
             (
                 v_payment_id,
                 v_installment_id,
+                p_loan_id,
                 v_allocate
             );
 
@@ -963,31 +778,3 @@ BEGIN
 END $$
 
 DELIMITER ;
-
-
--- PART 4: VERIFICATION QUERIES
-
-SELECT * FROM LoanApplication;
-SELECT * FROM Loan;
-SELECT * FROM LoanInstallment;
-SELECT * FROM Repayment;
-SELECT * FROM PaymentAllocation;
-
-
--- TEST CASES
-
--- 1. Apply for a loan:
--- CALL ApplyLoan(@demo_customer_id, @demo_branch_id,
---     'PERSONAL', 50000.00, 'Home renovation');
-
--- 2. Approve a pending application:
--- CALL ReviewLoan(6, 1, 'APPROVED');
-
--- 3. Disburse the approved loan:
--- CALL DisburseLoan(6, 9001000001, 12.00, 12);
-
--- 4. Generate installments:
--- CALL GenerateInstallments(2);
-
--- 5. Repay part of the loan:
--- CALL RepayLoan(2, 5000.00);

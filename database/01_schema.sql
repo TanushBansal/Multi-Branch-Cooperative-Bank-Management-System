@@ -69,6 +69,22 @@ CREATE TABLE AccountHolder (
     FOREIGN KEY (AccountNo) REFERENCES Account(AccountNo)
 );
 
+CREATE TABLE Nominee (
+    AccountNo BIGINT,
+    NomineeNo INT,
+    NomineeName VARCHAR(100) NOT NULL,
+    Relationship VARCHAR(50) NOT NULL,
+    DateOfBirth DATE,
+    Phone VARCHAR(15),
+    Address VARCHAR(255),
+
+    PRIMARY KEY (AccountNo, NomineeNo),
+    FOREIGN KEY (AccountNo) REFERENCES Account(AccountNo),
+    CHECK (NomineeNo > 0),
+    CHECK (CHAR_LENGTH(TRIM(NomineeName)) > 0),
+    CHECK (CHAR_LENGTH(TRIM(Relationship)) > 0)
+);
+
 CREATE TABLE SavingsAccount (
     AccountNo BIGINT PRIMARY KEY,
     InterestRate DECIMAL(5,2) NOT NULL,

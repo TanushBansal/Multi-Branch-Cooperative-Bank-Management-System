@@ -35,6 +35,27 @@ Set MYSQL_USER, MYSQL_PASSWORD (optional) and MYSQL_HOST (optional) in the envir
     scripts/                 Helper scripts to reset and build the database
     tests/                   Smoke tests (balance reconciliation, constraint checks)
 
+## Demonstration data
+
+`database/03_seed_data.sql` populates all 21 tables with fictional data as of
+2026-11-15. Load it once after the schema and constraints/triggers on empty tables:
+
+    mysql --login-path=local --execute="source database/03_seed_data.sql"
+
+The data includes three branches, joint accounts, nominees, every account type,
+active/frozen/closed accounts, intra-/inter-branch transfers, and approved,
+rejected, and pending applications. Loans demonstrate active, closed, sanctioned,
+and defaulted states, with EMI schedules and partial/multi-installment repayments.
+Balances reconcile with successful transaction history; pending and failed
+attempts do not affect balances. The file uses plain INSERT statements in dependency
+order. If an insert fails, earlier successful inserts remain in the database.
+Do not rerun it to add more data: its fixed demonstration IDs are intentionally unique.
+
+Validate the data in a disposable database with the same test environment settings
+described below:
+
+    python -m unittest discover -s tests -p test_seed_data.py -v
+
 ## Transaction procedures
 
 `database/04_transactions.sql` creates `Deposit`, `Withdraw`, and `Transfer`.

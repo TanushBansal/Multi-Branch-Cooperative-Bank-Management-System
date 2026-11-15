@@ -1,0 +1,15 @@
+# Generated bulk data and experiment outputs
+experiments/indexing/data/
+*.csv
+*.log
+*.tmp
+
+# Credentials and local config
+.env
+*.local.cnf
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

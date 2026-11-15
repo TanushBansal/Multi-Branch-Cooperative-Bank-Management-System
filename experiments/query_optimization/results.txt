@@ -1,0 +1,99 @@
+Query optimization benchmark results
+Scratch database: CooperativeBank_perf_1f47ce75
+Both transaction indexes were in place for every query.
+Each version was warmed up once, then measured five times with EXPLAIN ANALYZE.
+The displayed plan is from the last timed run.
+
+CASE 1: Accounts above their branch average
+Result equivalence: 2409 identical account IDs.
+
+Original SQL
+SELECT a.AccountNo
+FROM Account a
+WHERE a.Balance > (
+    SELECT AVG(b.Balance)
+    FROM Account b
+    WHERE b.BranchID = a.BranchID
+)
+ORDER BY a.AccountNo;
+
+Samples (ms): 10997, 10895, 10537, 10259, 10770
+Median (ms): 10770
+-> Filter: (a.Balance > (select #2))  (cost=505 rows=5010) (actual time=2..10770 rows=2409 loops=1)
+    -> Index scan on a using PRIMARY  (cost=505 rows=5010) (actual time=0.103..3.09 rows=5010 loops=1)
+    -> Select #2 (subquery in condition; dependent)
+        -> Aggregate: avg(b.Balance)  (cost=346 rows=1) (actual time=2.14..2.14 rows=1 loops=5010)
+            -> Index lookup on b using BranchID (BranchID=a.BranchID)  (cost=179 rows=1670) (actual time=0.212..1.95 rows=1670 loops=5010)
+
+Rewritten SQL
+WITH branch_averages AS (
+    SELECT BranchID, AVG(Balance) AS MeanBalance
+    FROM Account
+    GROUP BY BranchID
+)
+SELECT a.AccountNo
+FROM Account a
+JOIN branch_averages b ON b.BranchID = a.BranchID
+WHERE a.Balance > b.MeanBalance
+ORDER BY a.AccountNo;
+
+Samples (ms): 11.8, 11.4, 12, 12.2, 15.3
+Median (ms): 12
+-> Nested loop inner join  (cost=88180 rows=83492) (actual time=7.4..15.3 rows=2409 loops=1)
+    -> Index scan on a using PRIMARY  (cost=505 rows=5010) (actual time=0.158..2.09 rows=5010 loops=1)
+    -> Filter: (a.Balance > b.MeanBalance)  (cost=947..12.5 rows=16.7) (actual time=0.00227..0.00238 rows=0.481 loops=5010)
+        -> Covering index lookup on b using <auto_key0> (BranchID=a.BranchID)  (cost=1007..1019 rows=50) (actual time=0.00189..0.00205 rows=1 loops=5010)
+            -> Materialize CTE branch_averages  (cost=1006..1006 rows=3) (actual time=7.24..7.24 rows=3 loops=1)
+                -> Group aggregate: avg(`account`.Balance)  (cost=1006 rows=3) (actual time=2.8..7.19 rows=3 loops=1)
+                    -> Index scan on Account using BranchID  (cost=505 rows=5010) (actual time=0.754..6.58 rows=5010 loops=1)
+
+The original computed an average 5010 times. The rewrite materialized three
+branch averages once and joined them to the accounts.
+
+CASE 2: Accounts with more than ten successful transactions
+Result equivalence: 5000 identical account IDs.
+
+Original SQL
+SELECT a.AccountNo
+FROM Account a
+WHERE (
+    SELECT COUNT(*)
+    FROM BankTransaction t
+    WHERE t.AccountNo = a.AccountNo AND t.Status = 'SUCCESS'
+) > 10
+ORDER BY a.AccountNo;
+
+Samples (ms): 609, 631, 592, 658, 627
+Median (ms): 627
+-> Filter: ((select #2) > 10)  (cost=505 rows=5010) (actual time=0.295..627 rows=5000 loops=1)
+    -> Covering index scan on a using PRIMARY  (cost=505 rows=5010) (actual time=0.0739..1.82 rows=5010 loops=1)
+    -> Select #2 (subquery in condition; dependent)
+        -> Aggregate: count(0)  (cost=18.8 rows=1) (actual time=0.123..0.123 rows=1 loops=5010)
+            -> Filter: (t.`Status` = 'SUCCESS')  (cost=16.8 rows=19.8) (actual time=0.0487..0.12 rows=59.9 loops=5010)
+                -> Index lookup on t using ix_transaction_account_date (AccountNo=a.AccountNo)  (cost=16.8 rows=59.3) (actual time=0.0483..0.108 rows=59.9 loops=5010)
+
+Rewritten SQL
+SELECT a.AccountNo
+FROM Account a
+JOIN (
+    SELECT AccountNo
+    FROM BankTransaction
+    WHERE Status = 'SUCCESS'
+    GROUP BY AccountNo
+    HAVING COUNT(*) > 10
+) counts ON counts.AccountNo = a.AccountNo
+ORDER BY a.AccountNo;
+
+Samples (ms): 584, 579, 624, 643, 584
+Median (ms): 584
+-> Nested loop inner join  (cost=2.55e+6 rows=25.2e+6) (actual time=577..584 rows=5000 loops=1)
+    -> Covering index scan on a using PRIMARY  (cost=505 rows=5010) (actual time=0.0747..1.16 rows=5010 loops=1)
+    -> Covering index lookup on counts using <auto_key0> (AccountNo=a.AccountNo)  (cost=40708..40713 rows=19.9) (actual time=0.116..0.116 rows=0.998 loops=5010)
+        -> Materialize  (cost=40708..40708 rows=5039) (actual time=577..577 rows=5000 loops=1)
+            -> Filter: (count(0) > 10)  (cost=40204 rows=5039) (actual time=0.98..572 rows=5000 loops=1)
+                -> Group aggregate: count(0)  (cost=40204 rows=5039) (actual time=0.952..571 rows=5011 loops=1)
+                    -> Filter: (banktransaction.`Status` = 'SUCCESS')  (cost=30243 rows=99607) (actual time=0.946..554 rows=300021 loops=1)
+                        -> Index scan on BankTransaction using ix_transaction_account_date  (cost=30243 rows=298821) (actual time=0.943..500 rows=300024 loops=1)
+
+The rewrite replaced 5010 transaction lookups with one index scan and grouped
+aggregation. Its measured median was about 7% lower, with overlapping samples.

@@ -1,0 +1,30 @@
+Indexing benchmark results
+Scratch database: CooperativeBank_perf_1f47ce75
+Total transactions: 300024
+ANALYZE TABLE BankTransaction: OK before and after indexing
+
+Date range BEFORE
+Samples (ms): 105, 133, 123, 113, 120
+Median (ms): 120
+-> Aggregate: sum(banktransaction.Amount)  (cost=33563 rows=1) (actual time=120..120 rows=1 loops=1)
+    -> Filter: ((banktransaction.TransactionDate >= TIMESTAMP'2024-06-01 00:00:00') and (banktransaction.TransactionDate < TIMESTAMP'2024-06-03 00:00:00'))  (cost=30243 rows=33196) (actual time=0.951..119 rows=822 loops=1)
+        -> Table scan on BankTransaction  (cost=30243 rows=298821) (actual time=0.848..87.6 rows=300024 loops=1)
+
+Account + date range BEFORE
+Samples (ms): 0.243, 0.146, 0.196, 0.143, 0.106
+Median (ms): 0.146
+-> Aggregate: sum(banktransaction.Amount)  (cost=16.3 rows=1) (actual time=0.106..0.106 rows=1 loops=1)
+    -> Filter: ((banktransaction.TransactionDate >= TIMESTAMP'2024-06-01 00:00:00') and (banktransaction.TransactionDate < TIMESTAMP'2024-07-01 00:00:00'))  (cost=15.7 rows=6.67) (actual time=0.0873..0.101 rows=6 loops=1)
+        -> Index lookup on BankTransaction using AccountNo (AccountNo=100100)  (cost=15.7 rows=60) (actual time=0.0853..0.0926 rows=60 loops=1)
+
+Date range AFTER
+Samples (ms): 4.9, 5.13, 2.28, 2.58, 1.84
+Median (ms): 2.58
+-> Aggregate: sum(banktransaction.Amount)  (cost=452 rows=1) (actual time=1.84..1.84 rows=1 loops=1)
+    -> Index range scan on BankTransaction using ix_transaction_date over ('2024-06-01 00:00:00' <= TransactionDate < '2024-06-03 00:00:00'), with index condition: ((banktransaction.TransactionDate >= TIMESTAMP'2024-06-01 00:00:00') and (banktransaction.TransactionDate < TIMESTAMP'2024-06-03 00:00:00'))  (cost=370 rows=822) (actual time=0.283..1.75 rows=822 loops=1)
+
+Account + date range AFTER
+Samples (ms): 0.0662, 0.0546, 0.0642, 0.0489, 0.065
+Median (ms): 0.0642
+-> Aggregate: sum(banktransaction.Amount)  (cost=3.56 rows=1) (actual time=0.065..0.065 rows=1 loops=1)
+    -> Index range scan on BankTransaction using ix_transaction_account_date over (AccountNo = 100100 AND '2024-06-01 00:00:00' <= TransactionDate < '2024-07-01 00:00:00'), with index condition: ((banktransaction.AccountNo = 100100) and (banktransaction.TransactionDate >= TIMESTAMP'2024-06-01 00:00:00') and (banktransaction.TransactionDate < TIMESTAMP'2024-07-01 00:00:00'))  (cost=2.96 rows=6) (actual time=0.0546..0.0579 rows=6 loops=1)

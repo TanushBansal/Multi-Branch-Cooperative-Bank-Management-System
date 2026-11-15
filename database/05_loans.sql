@@ -1,4 +1,4 @@
--- 05_loans.sql: to be written
+
 -- =====================================================
 -- 05_loans.sql
 -- Loan Management Module
@@ -6,15 +6,16 @@
 -- Handles:
 -- 1. Loan application
 -- 2. Loan approval and rejection
--- 3. Loan disbursement
--- 4. EMI / installment generation
--- 5. Loan repayment
+-- 3. Loan disbursement (to be implemented)
+-- 4. EMI / installment generation (to be implemented)
+-- 5. Loan repayment (to be implemented)
 --
 -- Uses MySQL stored procedures and transactions.
 --
 -- Run after:
 -- 01_schema.sql
 -- 02_constraints_triggers.sql
+-- =====================================================
 
 USE CooperativeBank;
 
@@ -22,6 +23,15 @@ USE CooperativeBank;
 -- =====================================================
 -- PART 1: LOAN MODULE DEMONSTRATION DATASET
 -- =====================================================
+
+-- Initialize variables to avoid old session values
+
+SET @demo_bank_id = NULL;
+SET @demo_branch_id = NULL;
+SET @demo_employee_id = NULL;
+SET @demo_customer_id = NULL;
+SET @demo_guarantor_id = NULL;
+
 
 -- 1. Create demo bank if it does not exist
 
@@ -47,8 +57,10 @@ LIMIT 1;
 INSERT INTO Branch
 (BankID, IFSC, BranchName, Address)
 SELECT
-@demo_bank_id, 'DEMO0IND001', 'Indore Main Branch',
-'Vijay Nagar, Indore, Madhya Pradesh'
+    @demo_bank_id,
+    'DEMO0IND001',
+    'Indore Main Branch',
+    'Vijay Nagar, Indore, Madhya Pradesh'
 WHERE @demo_branch_id IS NULL;
 
 SET @demo_branch_id = IFNULL(@demo_branch_id, LAST_INSERT_ID());
@@ -64,8 +76,10 @@ LIMIT 1;
 INSERT INTO Employee
 (BranchID, EmployeeName, Phone, Email)
 SELECT
-@demo_branch_id, 'Rahul Sharma', '9876500001',
-'rahul.demo@bank.com'
+    @demo_branch_id,
+    'Rahul Sharma',
+    '9876500001',
+    'rahul.demo@bank.com'
 WHERE @demo_employee_id IS NULL;
 
 SET @demo_employee_id = IFNULL(@demo_employee_id, LAST_INSERT_ID());
@@ -76,7 +90,8 @@ SET @demo_employee_id = IFNULL(@demo_employee_id, LAST_INSERT_ID());
 INSERT INTO Manager (EmployeeID)
 SELECT @demo_employee_id
 WHERE NOT EXISTS (
-    SELECT 1 FROM Manager
+    SELECT 1
+    FROM Manager
     WHERE EmployeeID = @demo_employee_id
 );
 
@@ -91,9 +106,11 @@ LIMIT 1;
 INSERT INTO Customer
 (CustomerName, Phone, Email, PAN, Address)
 SELECT
-'Aman Verma', '9876500002',
-'aman.demo@gmail.com', 'ABCDE1234F',
-'Indore, Madhya Pradesh'
+    'Aman Verma',
+    '9876500002',
+    'aman.demo@gmail.com',
+    'ABCDE1234F',
+    'Indore, Madhya Pradesh'
 WHERE @demo_customer_id IS NULL;
 
 SET @demo_customer_id = IFNULL(@demo_customer_id, LAST_INSERT_ID());
@@ -104,10 +121,15 @@ SET @demo_customer_id = IFNULL(@demo_customer_id, LAST_INSERT_ID());
 INSERT INTO Account
 (AccountNo, BranchID, AccountType, Balance, Status, OpenedOn)
 SELECT
-9001000001, @demo_branch_id, 'SAVINGS',
-500000.00, 'ACTIVE', '2026-01-01'
+    9001000001,
+    @demo_branch_id,
+    'SAVINGS',
+    500000.00,
+    'ACTIVE',
+    '2026-01-01'
 WHERE NOT EXISTS (
-    SELECT 1 FROM Account
+    SELECT 1
+    FROM Account
     WHERE AccountNo = 9001000001
 );
 
@@ -117,7 +139,8 @@ WHERE NOT EXISTS (
 INSERT INTO AccountHolder (CustomerID, AccountNo)
 SELECT @demo_customer_id, 9001000001
 WHERE NOT EXISTS (
-    SELECT 1 FROM AccountHolder
+    SELECT 1
+    FROM AccountHolder
     WHERE CustomerID = @demo_customer_id
     AND AccountNo = 9001000001
 );
@@ -127,9 +150,13 @@ WHERE NOT EXISTS (
 
 INSERT INTO SavingsAccount
 (AccountNo, InterestRate, MinimumBalance)
-SELECT 9001000001, 4.00, 1000.00
+SELECT
+    9001000001,
+    4.00,
+    1000.00
 WHERE NOT EXISTS (
-    SELECT 1 FROM SavingsAccount
+    SELECT 1
+    FROM SavingsAccount
     WHERE AccountNo = 9001000001
 );
 
@@ -144,8 +171,10 @@ LIMIT 1;
 INSERT INTO Guarantor
 (GuarantorName, Phone, PAN, Address)
 SELECT
-'Rohan Mehta', '9876500003',
-'FGHIJ5678K', 'Indore, Madhya Pradesh'
+    'Rohan Mehta',
+    '9876500003',
+    'FGHIJ5678K',
+    'Indore, Madhya Pradesh'
 WHERE @demo_guarantor_id IS NULL;
 
 SET @demo_guarantor_id = IFNULL(@demo_guarantor_id, LAST_INSERT_ID());
@@ -191,7 +220,9 @@ WHERE GuarantorID = @demo_guarantor_id;
 -- =====================================================
 
 
+-- =====================================================
 -- PROCEDURE 1: APPLY FOR A LOAN
+-- =====================================================
 
 DROP PROCEDURE IF EXISTS ApplyLoan;
 
@@ -298,33 +329,130 @@ DELIMITER ;
 
 
 -- =====================================================
+-- PROCEDURE 2: REVIEW A LOAN APPLICATION
+-- =====================================================
+
+DROP PROCEDURE IF EXISTS ReviewLoan;
+
+DELIMITER $$
+
+CREATE PROCEDURE ReviewLoan(
+    IN p_application_id INT,
+    IN p_manager_id INT,
+    IN p_decision VARCHAR(20)
+)
+BEGIN
+
+    DECLARE v_count INT DEFAULT 0;
+    DECLARE v_application_branch INT;
+    DECLARE v_manager_branch INT;
+    DECLARE v_current_status VARCHAR(20);
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        RESIGNAL;
+    END;
+
+    START TRANSACTION;
+
+    -- Check whether the decision is valid
+
+    IF p_decision IS NULL OR UPPER(TRIM(p_decision)) NOT IN ('APPROVED', 'REJECTED') THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Invalid decision';
+    END IF;
+
+    -- Check whether the application exists
+
+    SELECT COUNT(*)
+    INTO v_count
+    FROM LoanApplication
+    WHERE ApplicationID = p_application_id;
+
+    IF v_count = 0 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Loan application does not exist';
+    END IF;
+
+    -- Get application status and branch
+
+    SELECT Status, BranchID
+    INTO v_current_status, v_application_branch
+    FROM LoanApplication
+    WHERE ApplicationID = p_application_id
+    FOR UPDATE;
+
+    -- Check whether the application is still pending
+
+    IF v_current_status <> 'PENDING' THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Application is already reviewed';
+    END IF;
+
+    -- Check whether the employee is a manager
+
+    SELECT COUNT(*)
+    INTO v_count
+    FROM Manager
+    WHERE EmployeeID = p_manager_id;
+
+    IF v_count = 0 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Employee is not a manager';
+    END IF;
+
+    -- Get manager branch
+
+    SELECT BranchID
+    INTO v_manager_branch
+    FROM Employee
+    WHERE EmployeeID = p_manager_id;
+
+    -- Check whether manager belongs to the same branch
+
+    IF v_manager_branch <> v_application_branch THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Manager belongs to a different branch';
+    END IF;
+
+    -- Update loan application
+
+    UPDATE LoanApplication
+    SET
+        Status = UPPER(TRIM(p_decision)),
+        ReviewedBy = p_manager_id,
+        DecisionDate = CURDATE()
+    WHERE ApplicationID = p_application_id;
+
+    COMMIT;
+
+    SELECT 'Loan application reviewed successfully' AS Message;
+
+END $$
+
+DELIMITER ;
+
+
+-- =====================================================
 -- PART 4: TEST CASES
 -- =====================================================
 
--- Test 1: Successful loan application
-
-CALL ApplyLoan(
-    @demo_customer_id,
-    @demo_branch_id,
-    'PERSONAL',
-    200000.00,
-    'Home renovation'
-);
-
-
--- Verify loan application
-
-SELECT * FROM LoanApplication;
+-- Test 1: Apply for a loan
+-- CALL ApplyLoan(
+--     @demo_customer_id,
+--     @demo_branch_id,
+--     'PERSONAL',
+--     200000.00,
+--     'Home renovation'
+-- );
 
 
--- Test 2: Invalid loan amount
--- Uncomment to test the error
+-- Test 2: Review a loan application
+-- Use an existing PENDING application ID.
+-- CALL ReviewLoan(4, 1, 'REJECTED');
 
-CALL ApplyLoan(
-    @demo_customer_id,
-    @demo_branch_id,
-    'PERSONAL',
-    50000.00,
-    'Home renovation'
-);
+
+-- Test 3: Verify loan applications
+
 SELECT * FROM LoanApplication;

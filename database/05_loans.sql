@@ -217,6 +217,11 @@ BEGIN
     DECLARE v_account_status VARCHAR(20);
     DECLARE v_transaction_id BIGINT;
     DECLARE v_loan_id INT;
+    DECLARE v_loan_status VARCHAR(20);
+    DECLARE v_sanctioned_account BIGINT;
+    DECLARE v_sanctioned_amount DECIMAL(15,2);
+    DECLARE v_sanctioned_rate DECIMAL(5,2);
+    DECLARE v_sanctioned_tenure INT;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -228,35 +233,32 @@ BEGIN
 
     -- Check application
 
-    SELECT COUNT(*)
-    INTO v_count
-    FROM LoanApplication
-    WHERE ApplicationID = p_application_id;
-
-    IF v_count = 0 THEN
-        SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Loan application does not exist';
-    END IF;
-
     SELECT CustomerID, RequestedAmount, Status
     INTO v_customer_id, v_amount, v_status
     FROM LoanApplication
     WHERE ApplicationID = p_application_id
     FOR UPDATE;
 
+    IF v_status IS NULL THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Loan application does not exist';
+    END IF;
+
     IF v_status <> 'APPROVED' THEN
         SIGNAL SQLSTATE '45000'
         SET MESSAGE_TEXT = 'Loan application is not approved';
     END IF;
 
-    -- Check whether loan already exists
+    -- Existing sanctions keep their loan identity, payout account and terms.
 
-    SELECT COUNT(*)
-    INTO v_count
+    SELECT LoanID, Status, PayoutAccountNo, SanctionAmount, InterestRate, TenureMonths
+    INTO v_loan_id, v_loan_status, v_sanctioned_account, v_sanctioned_amount,
+         v_sanctioned_rate, v_sanctioned_tenure
     FROM Loan
-    WHERE ApplicationID = p_application_id;
+    WHERE ApplicationID = p_application_id
+    FOR UPDATE;
 
-    IF v_count > 0 THEN
+    IF v_loan_id IS NOT NULL AND v_loan_status <> 'SANCTIONED' THEN
         SIGNAL SQLSTATE '45000'
         SET MESSAGE_TEXT = 'Loan has already been disbursed';
     END IF;
@@ -271,6 +273,17 @@ BEGIN
     IF p_tenure_months IS NULL OR p_tenure_months <= 0 THEN
         SIGNAL SQLSTATE '45000'
         SET MESSAGE_TEXT = 'Invalid loan tenure';
+    END IF;
+
+    IF v_loan_id IS NOT NULL THEN
+        IF NOT (p_account_no <=> v_sanctioned_account)
+           OR p_interest_rate <> v_sanctioned_rate
+           OR p_tenure_months <> v_sanctioned_tenure THEN
+            SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Payout account, interest rate and tenure must match the sanction';
+        END IF;
+
+        SET v_amount = v_sanctioned_amount;
     END IF;
 
     -- Check payout account belongs to customer
@@ -327,36 +340,43 @@ BEGIN
     SET Balance = Balance + v_amount
     WHERE AccountNo = p_account_no;
 
-    -- Create loan record
+    IF v_loan_id IS NULL THEN
+        INSERT INTO Loan
+        (
+            ApplicationID,
+            PayoutAccountNo,
+            SanctionDate,
+            SanctionAmount,
+            InterestRate,
+            TenureMonths,
+            Status,
+            DisbursementTransactionID,
+            DisbursementTransactionType,
+            DisbursementTransactionStatus
+        )
+        VALUES
+        (
+            p_application_id,
+            p_account_no,
+            CURDATE(),
+            v_amount,
+            p_interest_rate,
+            p_tenure_months,
+            'ACTIVE',
+            v_transaction_id,
+            'LOAN_DISBURSEMENT',
+            'SUCCESS'
+        );
 
-    INSERT INTO Loan
-    (
-        ApplicationID,
-        PayoutAccountNo,
-        SanctionDate,
-        SanctionAmount,
-        InterestRate,
-        TenureMonths,
-        Status,
-        DisbursementTransactionID,
-        DisbursementTransactionType,
-        DisbursementTransactionStatus
-    )
-    VALUES
-    (
-        p_application_id,
-        p_account_no,
-        CURDATE(),
-        v_amount,
-        p_interest_rate,
-        p_tenure_months,
-        'ACTIVE',
-        v_transaction_id,
-        'LOAN_DISBURSEMENT',
-        'SUCCESS'
-    );
-
-    SET v_loan_id = LAST_INSERT_ID();
+        SET v_loan_id = LAST_INSERT_ID();
+    ELSE
+        UPDATE Loan
+        SET Status = 'ACTIVE',
+            DisbursementTransactionID = v_transaction_id,
+            DisbursementTransactionType = 'LOAN_DISBURSEMENT',
+            DisbursementTransactionStatus = 'SUCCESS'
+        WHERE LoanID = v_loan_id;
+    END IF;
 
     COMMIT;
 
@@ -385,7 +405,7 @@ BEGIN
     DECLARE v_rate DECIMAL(10,8);
     DECLARE v_monthly_rate DECIMAL(10,8);
     DECLARE v_tenure INT;
-    DECLARE v_sanction_date DATE;
+    DECLARE v_schedule_start DATE;
     DECLARE v_loan_status VARCHAR(20);
 
     DECLARE v_emi DECIMAL(15,2);
@@ -419,17 +439,18 @@ BEGIN
         SanctionAmount,
         InterestRate,
         TenureMonths,
-        SanctionDate,
-        Status
+        COALESCE(DATE(t.TransactionDate), l.SanctionDate),
+        l.Status
     INTO
         v_amount,
         v_rate,
         v_tenure,
-        v_sanction_date,
+        v_schedule_start,
         v_loan_status
-    FROM Loan
-    WHERE LoanID = p_loan_id
-    FOR UPDATE;
+    FROM Loan l
+    LEFT JOIN BankTransaction t ON t.TransactionID = l.DisbursementTransactionID
+    WHERE l.LoanID = p_loan_id
+    FOR UPDATE OF l;
 
     IF v_loan_status NOT IN ('ACTIVE', 'SANCTIONED') THEN
         SIGNAL SQLSTATE '45000'
@@ -491,7 +512,7 @@ BEGIN
         (
             p_loan_id,
             v_i,
-            DATE_ADD(v_sanction_date, INTERVAL v_i MONTH),
+            DATE_ADD(v_schedule_start, INTERVAL v_i MONTH),
             v_principal,
             v_interest
         );
@@ -526,7 +547,6 @@ CREATE PROCEDURE RepayLoan(
 )
 BEGIN
 
-    DECLARE v_count INT DEFAULT 0;
     DECLARE v_account_no BIGINT;
     DECLARE v_loan_status VARCHAR(20);
     DECLARE v_balance DECIMAL(15,2);
@@ -553,23 +573,18 @@ BEGIN
 
     START TRANSACTION;
 
-    -- Check loan
-
-    SELECT COUNT(*)
-    INTO v_count
-    FROM Loan
-    WHERE LoanID = p_loan_id;
-
-    IF v_count = 0 THEN
-        SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Loan does not exist';
-    END IF;
+    -- Lock the loan before opening a consistent-read snapshot.
 
     SELECT PayoutAccountNo, Status
     INTO v_account_no, v_loan_status
     FROM Loan
     WHERE LoanID = p_loan_id
     FOR UPDATE;
+
+    IF v_loan_status IS NULL THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Loan does not exist';
+    END IF;
 
     IF v_loan_status <> 'ACTIVE' THEN
         SIGNAL SQLSTATE '45000'

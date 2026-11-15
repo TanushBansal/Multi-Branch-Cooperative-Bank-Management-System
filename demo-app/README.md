@@ -15,10 +15,22 @@ python demo-app/setup_demo.py
 
 This creates **CooperativeBankDemo**, never replaces an existing database, and does
 not modify CooperativeBank or any project SQL file. It loads the schema, constraints,
-seed data, account opening, transactions, and reporting view. It extracts only the
-ApplyLoan procedure from 05_loans.sql, excluding that file's independent demo inserts
+seed data, account opening, transactions, and reporting view. It extracts the five
+loan procedures from 05_loans.sql, excluding that file's independent demo inserts
 and sample calls. On a setup failure it retains the new database for inspection.
 Use `--name AnotherDemoName` to create a fresh separate demonstration database.
+
+To update loan procedures in an existing presentation database without resetting its data:
+
+```powershell
+python demo-app/install_loans.py --database CooperativeBankDemo
+```
+
+Restart the server after changing its Python code, then reload the browser.
+The installer supplies the current schema's required disbursement type/status
+and allocation LoanID columns in the installed demo routines. It leaves the source
+SQL file intact and adds a small LinkLoanGuarantor procedure for linking an existing
+guarantor to an application. It does not run the loan file's demo dataset or sample calls.
 
 Then start the app:
 
@@ -42,9 +54,17 @@ Running without `--database` selects CooperativeBank, so use the command above f
    view TransferDetails and BankTransaction to explain the atomic operation.
 6. Open Loans → Apply for a loan. Use customer 1, branch 1, type PERSONAL,
    amount 10000, purpose Home renovation. Run and refresh LoanApplication to see PENDING.
-7. Explore Loan, LoanInstallment, Repayment, and PaymentAllocation to show the seeded
-   examples. Approval/rejection, disbursement, EMI generation, and repayment procedures
-   are not implemented in the project's current loan file; the interface labels them pending.
+7. Select Link a guarantor: use the returned application ID and existing guarantor 1.
+8. Select Approve or reject application: use that application ID, manager 1, and Approve.
+9. Select Disburse a loan: use that application ID, account 1001, interest rate 12,
+   and tenure 3 months. Note the returned LoanID; refresh Loan and Account.
+10. Select Generate installments with that LoanID, then refresh LoanInstallment.
+11. Select Repay a loan with that LoanID and amount 500. Refresh Repayment,
+    PaymentAllocation, and Account. Repaying the remaining schedule balance closes the loan.
+
+Approval requires a linked guarantor and a manager from the application's branch.
+Review can also reject a pending application. Disbursement requires approval and an
+active account held by the applicant. Repayment requires generated installments.
 
 The three account-opening procedures are also supported. Use an unused account
 number, an existing branch/customer, and values satisfying your database constraints.

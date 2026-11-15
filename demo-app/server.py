@@ -20,6 +20,8 @@ OPERATIONS = {
     'Deposit': 'Banking', 'Withdraw': 'Banking', 'Transfer': 'Banking',
     'OpenSavingsAccount': 'Banking', 'OpenCurrentAccount': 'Banking',
     'OpenFixedDeposit': 'Banking', 'ApplyLoan': 'Loans',
+    'LinkLoanGuarantor': 'Loans', 'ReviewLoan': 'Loans',
+    'DisburseLoan': 'Loans', 'GenerateInstallments': 'Loans', 'RepayLoan': 'Loans',
 }
 MYSQL_ARGS = []
 

@@ -13,6 +13,11 @@ const titles = {
   OpenCurrentAccount: 'Open current account',
   OpenFixedDeposit: 'Open fixed deposit',
   ApplyLoan: 'Apply for a loan',
+  LinkLoanGuarantor: 'Link a guarantor',
+  ReviewLoan: 'Approve or reject application',
+  DisburseLoan: 'Disburse a loan',
+  GenerateInstallments: 'Generate installments',
+  RepayLoan: 'Repay a loan',
 };
 async function api(path, options) {
   const response = await fetch(path, options);
@@ -43,12 +48,15 @@ function renderForm() {
   for (const p of op.parameters.filter((p) => p.PARAMETER_MODE === 'IN')) {
     const wrapper = document.createElement('div'),
       caption = document.createElement('label'),
-      input = document.createElement('input');
+      input = document.createElement(p.PARAMETER_NAME === 'p_decision' ? 'select' : 'input');
     input.id = 'field-' + p.PARAMETER_NAME;
     input.name = p.PARAMETER_NAME;
     input.required = true;
     caption.htmlFor = input.id;
     caption.textContent = label(p.PARAMETER_NAME);
+    if (p.PARAMETER_NAME === 'p_decision') {
+      input.append(option('APPROVED', 'Approve'), option('REJECTED', 'Reject'));
+    }
     if (p.DATA_TYPE === 'date') {
       const now = new Date();
       input.type = 'date';
@@ -81,7 +89,7 @@ function switchSection(next) {
   $('description').textContent =
     section === 'Banking'
       ? 'Perform an operation. Refresh the tables to see what changed.'
-      : 'Submit an application and inspect the loan lifecycle tables.';
+      : 'Apply, link a guarantor, review, disburse, generate installments, and repay.';
   $('pending').hidden = section !== 'Loans';
   $('operation').replaceChildren(
     ...config.operations

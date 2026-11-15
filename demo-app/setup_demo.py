@@ -2,17 +2,15 @@
 import re
 from pathlib import Path
 import server
+import install_loans
 
 
 def create_demo(name='CooperativeBankDemo'):
     if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_]{0,63}', name):
         raise ValueError('Invalid demo database name')
     source = Path(__file__).resolve().parent.parent / 'database'
-    # Fail before making any change if the application procedure cannot be located.
-    loans = (source / '05_loans.sql').read_text(encoding='utf-8-sig')
-    match = re.search(r'CREATE PROCEDURE ApplyLoan\s*\(.*?END\s*\$\$', loans, re.S | re.I)
-    if not match:
-        raise ValueError('Cannot locate ApplyLoan in 05_loans.sql')
+    # Validate all routine definitions before creating the database.
+    install_loans.procedure_definitions()
     server.query('CREATE DATABASE `' + name + '`;')
     try:
         for filename in ['01_schema.sql', '02_constraints_triggers.sql', '02_account_opening.sql',
@@ -21,11 +19,11 @@ def create_demo(name='CooperativeBankDemo'):
             sql = re.sub(r'CREATE DATABASE IF NOT EXISTS CooperativeBank\s*;', '', sql, flags=re.I)
             sql = re.sub(r'USE CooperativeBank\s*;', 'USE `' + name + '`;', sql, flags=re.I)
             server.query(sql)
-        server.query('USE `' + name + '`;\nDELIMITER $$\n' + match.group(0) + '\nDELIMITER ;\n')
+        install_loans.install(name)
     except Exception:
         print('Setup stopped. The newly created database was retained for inspection; no reset was attempted.')
         raise
-    print('Created ' + name + ' with sample data and seven supported operation procedures.')
+    print('Created ' + name + ' with sample data and all supported operation procedures.')
 
 
 if __name__ == '__main__':

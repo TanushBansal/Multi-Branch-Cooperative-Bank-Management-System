@@ -25,7 +25,7 @@ try:
             return json.load(response)
 
     config = get('/api/config')
-    assert sum(o['available'] for o in config['operations']) == 7
+    assert sum(o['available'] for o in config['operations']) == 12
     for table in config['tables']:
         assert get('/api/table?name=' + table)['columns']
     for asset in ['/', '/app.js', '/style.css']:
@@ -50,7 +50,30 @@ try:
     operate('OpenSavingsAccount', ['7001','1','1','2026-11-15','4','100','500','web-saving'])
     operate('OpenCurrentAccount', ['7002','1','1','2026-11-15','100','500','web-current'])
     operate('OpenFixedDeposit', ['7003','1','1','2026-11-15','2027-11-15','500','6','web-fd'])
-    operate('ApplyLoan', ['1','1','PERSONAL','10000','Presentation test'])
+    application = operate('ApplyLoan', ['1','1','PERSONAL','10000','Presentation test'])
+    application_id = application['results'][0][0]['ApplicationID']
+    operate('LinkLoanGuarantor', [application_id, '1'])
+    operate('ReviewLoan', [application_id, '1', 'APPROVED'])
+    funded = operate('DisburseLoan', [application_id, '1001', '12', '3'])
+    loan_id = funded['results'][0][0]['LoanID']
+    operate('GenerateInstallments', [loan_id])
+    assert len(server.rows('SELECT * FROM LoanInstallment WHERE LoanID=' + loan_id)) == 3
+    repaid = operate('RepayLoan', [loan_id, '500'])
+    payment_id = repaid['results'][0][0]['PaymentID']
+    allocation = server.rows('SELECT LoanID, SUM(AllocatedAmount) AS Total FROM PaymentAllocation '
+                             'WHERE PaymentID=' + payment_id + ' GROUP BY LoanID')[0]
+    assert allocation == {'LoanID': loan_id, 'Total': '500.00'}
+    remaining = repaid['results'][0][0]['RemainingAmount']
+    operate('RepayLoan', [loan_id, remaining])
+    assert server.rows('SELECT Status FROM Loan WHERE LoanID=' + loan_id)[0]['Status'] == 'CLOSED'
+    rejected = operate('ApplyLoan', ['1','1','PERSONAL','1000','Rejection test'])
+    reject_id = rejected['results'][0][0]['ApplicationID']
+    operate('ReviewLoan', [reject_id, '1', 'REJECTED'])
+    try:
+        operate('DisburseLoan', [reject_id, '1001', '12', '3'])
+        raise AssertionError('Rejected application was disbursed')
+    except HTTPError as error:
+        assert error.code == 400
     before = server.rows('SELECT Balance FROM Account WHERE AccountNo=1001')
     try:
         operate('Withdraw', ['1001','999999','ATM','web-reject'])
@@ -63,7 +86,7 @@ try:
         raise AssertionError('Missing token was accepted')
     except HTTPError as error:
         assert error.code == 403
-    print('PASS: 7 real operations, 21 table endpoints, static files, rejected withdrawal rollback, and request-token protection.')
+    print('PASS: 12 operations, full loan lifecycle through closure, rejection, 21 tables, rollback, and token protection.')
 finally:
     if httpd:
         httpd.shutdown()

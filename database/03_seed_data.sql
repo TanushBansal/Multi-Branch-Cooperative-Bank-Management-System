@@ -9,13 +9,13 @@ INSERT INTO Branch (BranchID, BankID, IFSC, BranchName, Address) VALUES
     (2, 1, 'SAHY0000002', 'Jaipur Central', 'MI Road, Jaipur'),
     (3, 1, 'SAHY0000003', 'Pune Central', 'Shivajinagar, Pune');
 
-INSERT INTO Employee (EmployeeID, BranchID, EmployeeName, Phone, Email) VALUES
-    (1, 1, 'Ananya Sharma', '9000000001', 'ananya.sharma@example.com'),
-    (2, 1, 'Rohit Verma', '9000000002', 'rohit.verma@example.com'),
-    (3, 2, 'Meera Joshi', '9000000003', 'meera.joshi@example.com'),
-    (4, 2, 'Karan Singh', '9000000004', 'karan.singh@example.com'),
-    (5, 3, 'Priya Desai', '9000000005', 'priya.desai@example.com'),
-    (6, 3, 'Amit Kulkarni', '9000000006', 'amit.kulkarni@example.com');
+INSERT INTO Employee (EmployeeID, BranchID, EmployeeName, Phone, Email, EmployeeRole) VALUES
+    (1, 1, 'Ananya Sharma', '9000000001', 'ananya.sharma@example.com', 'MANAGER'),
+    (2, 1, 'Rohit Verma', '9000000002', 'rohit.verma@example.com', 'CLERK'),
+    (3, 2, 'Meera Joshi', '9000000003', 'meera.joshi@example.com', 'MANAGER'),
+    (4, 2, 'Karan Singh', '9000000004', 'karan.singh@example.com', 'CLERK'),
+    (5, 3, 'Priya Desai', '9000000005', 'priya.desai@example.com', 'MANAGER'),
+    (6, 3, 'Amit Kulkarni', '9000000006', 'amit.kulkarni@example.com', 'CLERK');
 
 INSERT INTO Manager (EmployeeID) VALUES (1), (3), (5);
 INSERT INTO Clerk (EmployeeID) VALUES (2), (4), (6);
@@ -107,10 +107,10 @@ INSERT INTO TransferDetails (TransactionID, FromAccountNo, ToAccountNo) VALUES
 INSERT INTO LoanApplication
     (ApplicationID, CustomerID, BranchID, ApplicationDate, LoanType,
      RequestedAmount, Purpose, Status, ReviewedBy, DecisionDate) VALUES
-    (1, 1, 1, '2026-08-25', 'Personal', 12000.00, 'Home repairs', 'APPROVED', 1, '2026-08-28 10:00:00'),
-    (2, 5, 2, '2026-06-20', 'Education', 6000.00, 'Course fees', 'APPROVED', 3, '2026-06-25 10:00:00'),
-    (3, 1, 3, '2026-11-01', 'Business', 30000.00, 'Equipment purchase', 'APPROVED', 5, '2026-11-05 10:00:00'),
-    (4, 8, 3, '2026-04-20', 'Business', 9000.00, 'Working capital', 'APPROVED', 5, '2026-04-25 10:00:00'),
+    (1, 1, 1, '2026-08-25', 'Personal', 12000.00, 'Home repairs', 'PENDING', NULL, NULL),
+    (2, 5, 2, '2026-06-20', 'Education', 6000.00, 'Course fees', 'PENDING', NULL, NULL),
+    (3, 1, 3, '2026-11-01', 'Business', 30000.00, 'Equipment purchase', 'PENDING', NULL, NULL),
+    (4, 8, 3, '2026-04-20', 'Business', 9000.00, 'Working capital', 'PENDING', NULL, NULL),
     (5, 4, 1, '2026-10-10', 'Personal', 20000.00, 'Travel expenses', 'REJECTED', 1, '2026-10-12 10:00:00'),
     (6, 6, 2, '2026-11-10', 'Personal', 15000.00, 'Medical expenses', 'PENDING', NULL, NULL);
 
@@ -123,13 +123,20 @@ INSERT INTO Guarantor (GuarantorID, GuarantorName, Phone, PAN, Address) VALUES
 INSERT INTO ApplicationGuarantor (ApplicationID, GuarantorID) VALUES
     (1, 1), (1, 2), (2, 2), (3, 3), (4, 4), (4, 1), (5, 1), (6, 2);
 
+-- Guarantors must be linked before approval.
+UPDATE LoanApplication SET Status='APPROVED', ReviewedBy=1, DecisionDate='2026-08-28 10:00:00' WHERE ApplicationID=1;
+UPDATE LoanApplication SET Status='APPROVED', ReviewedBy=3, DecisionDate='2026-06-25 10:00:00' WHERE ApplicationID=2;
+UPDATE LoanApplication SET Status='APPROVED', ReviewedBy=5, DecisionDate='2026-11-05 10:00:00' WHERE ApplicationID=3;
+UPDATE LoanApplication SET Status='APPROVED', ReviewedBy=5, DecisionDate='2026-04-25 10:00:00' WHERE ApplicationID=4;
+
 INSERT INTO Loan
     (LoanID, ApplicationID, PayoutAccountNo, SanctionDate, SanctionAmount,
-     InterestRate, TenureMonths, Status, DisbursementTransactionID) VALUES
-    (1, 1, 1001, '2026-09-01', 12000.00, 12.00, 3, 'ACTIVE', 13),
-    (2, 2, 2001, '2026-07-01', 6000.00, 0.00, 3, 'CLOSED', 12),
-    (3, 3, 3002, '2026-11-06', 30000.00, 9.00, 6, 'SANCTIONED', NULL),
-    (4, 4, 3001, '2026-05-01', 9000.00, 12.00, 3, 'DEFAULTED', 11);
+     InterestRate, TenureMonths, Status, DisbursementTransactionID,
+     DisbursementTransactionType, DisbursementTransactionStatus) VALUES
+    (1, 1, 1001, '2026-09-01', 12000.00, 12.00, 3, 'ACTIVE', 13, 'LOAN_DISBURSEMENT', 'SUCCESS'),
+    (2, 2, 2001, '2026-07-01', 6000.00, 0.00, 3, 'CLOSED', 12, 'LOAN_DISBURSEMENT', 'SUCCESS'),
+    (3, 3, 3002, '2026-11-06', 30000.00, 9.00, 6, 'SANCTIONED', NULL, NULL, NULL),
+    (4, 4, 3001, '2026-05-01', 9000.00, 12.00, 3, 'DEFAULTED', 11, 'LOAN_DISBURSEMENT', 'SUCCESS');
 
 -- Reducing-balance monthly EMI schedules; rates above are annual percentages.
 -- Interest and principal are rounded to cents each month. The final
@@ -154,7 +161,7 @@ INSERT INTO Repayment (PaymentID, LoanID, TransactionID, PaidAt, Amount) VALUES
 
 -- A partial payment, one payment covering multiple installments, and
 -- an installment settled across multiple payments are all demonstrated.
-INSERT INTO PaymentAllocation (PaymentID, InstallmentID, AllocatedAmount) VALUES
-    (1, 1, 3000.00),
-    (2, 4, 2000.00), (2, 5, 2000.00), (2, 6, 2000.00),
-    (3, 1, 1080.27), (3, 2, 1000.00);
+INSERT INTO PaymentAllocation (PaymentID, InstallmentID, LoanID, AllocatedAmount) VALUES
+    (1, 1, 1, 3000.00),
+    (2, 4, 2, 2000.00), (2, 5, 2, 2000.00), (2, 6, 2, 2000.00),
+    (3, 1, 1, 1080.27), (3, 2, 1, 1000.00);

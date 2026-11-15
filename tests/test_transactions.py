@@ -44,7 +44,7 @@ class TransactionsTest(unittest.TestCase):
         cls.database = "cb_transactions_test_" + uuid.uuid4().hex
         cls.execute("CREATE DATABASE " + cls.database, database=False)
         cls.addClassCleanup(cls.drop_database)
-        for filename in ("01_schema.sql", "02_constraints_triggers.sql", "04_transactions.sql"):
+        for filename in ("01_schema.sql", "02_constraints_triggers.sql", "04_transactions.sql", "06_views.sql"):
             sql = (ROOT / "database" / filename).read_text(encoding="utf-8")
             sql = sql.replace("CREATE DATABASE IF NOT EXISTS CooperativeBank;", "")
             sql = sql.replace("USE CooperativeBank;", "USE " + cls.database + ";")
@@ -60,11 +60,11 @@ class TransactionsTest(unittest.TestCase):
 
     def setUp(self):
         self.execute("""
-            DELETE FROM TransferDetails;
+            TRUNCATE TABLE TransferDetails;
             DELETE FROM BankTransaction;
-            DELETE FROM SavingsAccount;
-            DELETE FROM CurrentAccount;
-            DELETE FROM FixedDeposit;
+            TRUNCATE TABLE SavingsAccount;
+            TRUNCATE TABLE CurrentAccount;
+            TRUNCATE TABLE FixedDeposit;
             DELETE FROM AccountHolder;
             DELETE FROM Account;
             DELETE FROM Customer;
@@ -84,9 +84,10 @@ class TransactionsTest(unittest.TestCase):
                 (3001, 3, 'CURRENT', 1000, 'ACTIVE', '2026-01-01'),
                 (4001, 1, 'FD', 1000, 'ACTIVE', '2026-01-01');
             INSERT INTO AccountHolder VALUES (1,1001),(1,1002),(1,2001),(1,3001),(1,4001);
-            INSERT INTO SavingsAccount VALUES (1001, 4, 100);
-            INSERT INTO CurrentAccount VALUES (1002, 100), (2001, 100), (3001, 100);
-            INSERT INTO FixedDeposit VALUES (4001,1000,6,'2026-01-01','2027-01-01');
+            INSERT INTO SavingsAccount (AccountNo, InterestRate, MinimumBalance) VALUES (1001, 4, 100);
+            INSERT INTO CurrentAccount (AccountNo, MinimumBalance) VALUES (1002, 100), (2001, 100), (3001, 100);
+            INSERT INTO FixedDeposit (AccountNo, Principal, InterestRate, StartDate, MaturityDate)
+                VALUES (4001,1000,6,'2026-01-01','2027-01-01');
         """)
 
     def snapshot(self):
@@ -106,6 +107,37 @@ class TransactionsTest(unittest.TestCase):
 
     def balance(self, account):
         return Decimal(self.execute(f"SELECT Balance FROM Account WHERE AccountNo={account}"))
+
+    def test_subtype_defaults_match_parent(self):
+        for table, expected in (("SavingsAccount", "SAVINGS"), ("CurrentAccount", "CURRENT"),
+                                ("FixedDeposit", "FD")):
+            self.assertEqual(self.execute(f"SELECT DISTINCT AccountType FROM {table}"), expected)
+
+    def test_mismatched_subtype_inserts_are_rejected(self):
+        for sql in (
+            "INSERT INTO SavingsAccount (AccountNo,InterestRate) VALUES (1002,4)",
+            "INSERT INTO CurrentAccount (AccountNo) VALUES (1001)",
+            "INSERT INTO FixedDeposit (AccountNo,Principal,InterestRate,StartDate,MaturityDate) "
+            "VALUES (1001,1000,6,'2026-01-01','2027-01-01')",
+        ):
+            with self.subTest(sql=sql):
+                self.assert_rejected(sql, "foreign key constraint fails")
+
+    def test_subtype_updates_cannot_bypass_type_checks(self):
+        for table, account, wrong_account, wrong_type in (
+            ("SavingsAccount", 1001, 1002, "CURRENT"),
+            ("CurrentAccount", 1002, 1001, "SAVINGS"),
+            ("FixedDeposit", 4001, 1001, "SAVINGS"),
+        ):
+            before = self.execute(f"SELECT * FROM {table} ORDER BY AccountNo")
+            with self.subTest(table=table):
+                self.assert_rejected(f"UPDATE {table} SET AccountNo={wrong_account} "
+                                     f"WHERE AccountNo={account}", "owner cannot change")
+                self.assert_rejected(f"UPDATE {table} SET AccountType='{wrong_type}' "
+                                     f"WHERE AccountNo={account}", "Check constraint")
+                self.assert_rejected(f"UPDATE {table} SET AccountType=NULL "
+                                     f"WHERE AccountNo={account}", "cannot be null")
+                self.assertEqual(self.execute(f"SELECT * FROM {table} ORDER BY AccountNo"), before)
 
     def test_deposit_and_withdrawal(self):
         self.execute("CALL Deposit(1001,500,'BRANCH','d1',@id); SELECT @id;")
@@ -132,6 +164,51 @@ class TransactionsTest(unittest.TestCase):
         self.assert_rejected("CALL Deposit(NULL,1,NULL,'null',@id)", "Account number is required")
         self.assert_rejected("CALL Transfer(1001,1001,1,NULL,'self',@id)", "Two different")
         self.assert_rejected("CALL Transfer(NULL,1001,1,NULL,'null',@id)", "Two different")
+
+    def test_transfer_details_reject_non_transfer_inserts(self):
+        self.execute("CALL Deposit(1001,10,NULL,'deposit-details',@id)")
+        transaction = self.execute("SELECT TransactionID FROM BankTransaction WHERE RequestID='deposit-details'")
+        self.assert_rejected("INSERT INTO TransferDetails (TransactionID,FromAccountNo,ToAccountNo) "
+                             f"VALUES ({transaction},1001,2001)", "foreign key constraint fails")
+
+    def test_transfer_details_updates_and_parent_retyping_are_rejected(self):
+        self.execute("CALL Transfer(1001,2001,10,NULL,'valid-details',@id)")
+        self.execute("CALL Deposit(1001,10,NULL,'other-type',@id)")
+        transaction = self.execute("SELECT TransactionID FROM BankTransaction WHERE RequestID='valid-details'")
+        deposit = self.execute("SELECT TransactionID FROM BankTransaction WHERE RequestID='other-type'")
+        self.assertEqual(self.execute(f"SELECT TransactionType FROM TransferDetails WHERE TransactionID={transaction}"),
+                         "TRANSFER")
+        self.assert_rejected(f"UPDATE TransferDetails SET TransactionID={deposit} WHERE TransactionID={transaction}",
+                             "cannot be reassigned")
+        self.assert_rejected(f"UPDATE TransferDetails SET TransactionType='DEPOSIT' WHERE TransactionID={transaction}",
+                             "Check constraint")
+        self.assert_rejected(f"UPDATE TransferDetails SET TransactionType=NULL WHERE TransactionID={transaction}",
+                             "cannot be null")
+        # Set AccountNo too, satisfying the parent's existing CHECK so that the
+        # composite FK is what blocks the attempt to turn this into a deposit.
+        self.assert_rejected("UPDATE BankTransaction SET TransactionType='DEPOSIT',AccountNo=1001 "
+                             f"WHERE TransactionID={transaction}", "foreign key constraint fails")
+
+    def test_transfer_details_cannot_be_deleted_or_reassigned(self):
+        self.execute("CALL Transfer(1001,2001,10,NULL,'keep-details',@id)")
+        transaction = self.execute("SELECT TransactionID FROM BankTransaction WHERE RequestID='keep-details'")
+        self.assert_rejected(f"DELETE FROM TransferDetails WHERE TransactionID={transaction}", 'cannot be deleted')
+        for changes in ('FromAccountNo=1002', 'ToAccountNo=1002'):
+            self.assert_rejected(f"UPDATE TransferDetails SET {changes} WHERE TransactionID={transaction}",
+                                 'cannot be reassigned')
+        self.assertEqual(self.execute("SELECT COUNT(*) FROM v_transfer_integrity_violations"), '0')
+
+    def test_transfer_audit_detects_administrative_import_omissions(self):
+        for status in ('PENDING','SUCCESS','FAILED'):
+            transaction = self.execute("INSERT INTO BankTransaction "
+                "(AccountNo,TransactionType,Amount,Status,RequestID) "
+                f"VALUES (NULL,'TRANSFER',1,'{status}','audit-{status}'); SELECT LAST_INSERT_ID();")
+            self.assertEqual(self.execute("SELECT Status FROM v_transfer_integrity_violations "
+                                          f"WHERE TransactionID={transaction}"), status)
+            self.execute("INSERT INTO TransferDetails (TransactionID,FromAccountNo,ToAccountNo) "
+                         f"VALUES ({transaction},1001,2001)")
+            self.assertEqual(self.execute("SELECT COUNT(*) FROM v_transfer_integrity_violations "
+                                          f"WHERE TransactionID={transaction}"), '0')
 
     def test_missing_accounts(self):
         self.assert_rejected("CALL Deposit(9999,1,NULL,'missing',@id)", "does not exist")
@@ -162,7 +239,7 @@ class TransactionsTest(unittest.TestCase):
         self.assertEqual(self.balance(1001), Decimal("100"))
 
     def test_missing_source_subtype(self):
-        self.execute("DELETE FROM SavingsAccount WHERE AccountNo=1001")
+        self.execute("TRUNCATE TABLE SavingsAccount")
         self.assert_rejected("CALL Withdraw(1001,1,NULL,'missing',@id)", "subtype record is missing")
         self.assert_rejected("CALL Transfer(1001,2001,1,NULL,'missing',@id)", "subtype record is missing")
 

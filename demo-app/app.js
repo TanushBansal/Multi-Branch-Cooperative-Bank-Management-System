@@ -125,17 +125,7 @@ async function refresh() {
     const records = data.rows.map((row) => {
       const tr = document.createElement('tr');
       const previous = old?.find((r) =>
-        data.columns
-          .slice(
-            0,
-            table === 'AccountHolder' ||
-              table === 'PaymentAllocation' ||
-              table === 'ApplicationGuarantor' ||
-              table === 'Nominee'
-              ? 2
-              : 1,
-          )
-          .every((c) => r[c] === row[c]),
+        data.keys.every((c) => r[c] === row[c]),
       );
       data.columns.forEach((c) => {
         const td = document.createElement('td');
@@ -233,7 +223,13 @@ async function boot() {
     config = await api('/api/config');
     $('database').textContent = config.database;
     $('connection').textContent = '● MySQL connected';
-    $('table').replaceChildren(...config.tables.map((t) => option(t, t)));
+    const tables = document.createElement('optgroup');
+    tables.label = 'Tables';
+    tables.append(...config.tables.map((t) => option(t, t)));
+    const reports = document.createElement('optgroup');
+    reports.label = 'Reports and audit views';
+    reports.append(...config.views.map((v) => option(v, label(v.replace(/^v_/, '')))));
+    $('table').replaceChildren(tables, reports);
     switchSection(section);
   } catch (error) {
     $('connection').textContent = 'Connection unavailable';

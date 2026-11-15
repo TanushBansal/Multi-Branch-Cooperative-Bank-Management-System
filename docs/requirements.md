@@ -230,15 +230,14 @@ writing this document. Detailed demo commands are in [demo-app/README.md](../dem
 | Financial operations | `database/04_transactions.sql` |
 | Loan workflow | `database/05_loans.sql`; demo integration in `demo-app/install_loans.py` |
 | Reporting | `database/06_views.sql`, `tests/report_views_checks.sql` |
-| Indexing deliverable | `database/07_indexes.sql` (currently a placeholder) |
+| Indexing deliverable | `database/07_indexes.sql` (transaction date and account/date indexes; measurements remain separate) |
 | Concurrency demonstration | `experiments/concurrency/` |
 | Presentation interface | `demo-app/` |
 | Automated verification | `tests/`, `demo-app/test_server.py`, `demo-app/check_integration.py` |
 
-The demo installer currently supplements missing disbursement type/status fields
-and allocation LoanID values in the installed loan routines, and adds guarantor
-linking. A working demo therefore does not establish that the unmodified numbered
-SQL build is complete. Remaining implementation gaps, including unrestricted-DML
+The demo installs the source loan procedures without compatibility rewrites and adds
+a guarantor-linking helper. Setup also installs reporting views and indexes; its
+update mode retains table data. Remaining implementation gaps, including unrestricted-DML
 integrity cases, CRUD demonstration coverage, and access grants for the full loan
 and reporting interface, must be assessed separately.
 

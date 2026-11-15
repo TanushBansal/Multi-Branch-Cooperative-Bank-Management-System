@@ -1,7 +1,7 @@
 # Presentation demo
 
 A local, dependency-free web app: Python 3.9+ and your installed MySQL CLI.
-Banking and Loans have separate operation forms. Table explorer reads all 21 tables,
+Banking and Loans have separate operation forms. Data explorer reads all 21 tables and 10 reporting/audit views,
 50 rows per page. Refresh highlights new rows and changed cells on a previously viewed page.
 Records stay visible until you refresh, so you can explain the before/after in your presentation.
 
@@ -15,9 +15,8 @@ python demo-app/setup_demo.py
 
 This creates **CooperativeBankDemo**, never replaces an existing database, and does
 not modify CooperativeBank or any project SQL file. It loads the schema, constraints,
-seed data, account opening, transactions, and reporting view. It extracts the five
-loan procedures from 05_loans.sql, excluding that file's independent demo inserts
-and sample calls. On a setup failure it retains the new database for inspection.
+seed data, account opening, transactions, reporting views, and indexes. It installs
+the five loan procedures directly from 05_loans.sql without rewriting their bodies. On a setup failure it retains the new database for inspection.
 Use `--name AnotherDemoName` to create a fresh separate demonstration database.
 
 To update loan procedures in an existing presentation database without resetting its data:
@@ -27,10 +26,16 @@ python demo-app/install_loans.py --database CooperativeBankDemo
 ```
 
 Restart the server after changing its Python code, then reload the browser.
-The installer supplies the current schema's required disbursement type/status
-and allocation LoanID columns in the installed demo routines. It leaves the source
-SQL file intact and adds a small LinkLoanGuarantor procedure for linking an existing
-guarantor to an application. It does not run the loan file's demo dataset or sample calls.
+The installer also adds LinkLoanGuarantor for linking an existing guarantor to an
+application. To refresh loans, reporting views, and indexes together:
+
+```powershell
+python demo-app/setup_demo.py --update --name CooperativeBankDemo
+```
+
+This preserves table records and skips matching existing indexes. It does not
+migrate table definitions or reload seed data; create a fresh database for schema
+changes or use a separate migration.
 
 Then start the app:
 
@@ -65,6 +70,10 @@ Running without `--database` selects CooperativeBank, so use the command above f
 Approval requires a linked guarantor and a manager from the application's branch.
 Review can also reject a pending application. Disbursement requires approval and an
 active account held by the applicant. Repayment requires generated installments.
+
+In the data explorer, choose Reports and audit views to inspect account/customer
+statements, branch summaries, staffing, transaction history, loan portfolios, pending
+applications, or missing transfer details. Refresh loads the latest report values.
 
 The three account-opening procedures are also supported. Use an unused account
 number, an existing branch/customer, and values satisfying your database constraints.

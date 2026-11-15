@@ -1,4 +1,4 @@
-﻿# Multi-Branch Cooperative Bank Management System
+# Multi-Branch Cooperative Bank Management System
 
 A MySQL database project for **CS257 — Database and Information Systems Lab**.
 It models banking across multiple branches, with transaction-safe financial
@@ -56,7 +56,7 @@ python demo-app/setup_demo.py
 ```
 
 This creates **CooperativeBankDemo**, loads sample data, and installs the schema,
-constraints, banking procedures, loan procedures, and reporting views. It does not
+constraints, banking procedures, loan procedures, reporting views, and indexes. It does not
 change an existing `CooperativeBank` database or overwrite an existing demo database.
 
 If the demo database already exists, skip setup. For a fresh dataset under a new name:
@@ -113,7 +113,9 @@ SELECT * FROM v_loan_portfolio;
 SELECT * FROM v_pending_applications;
 ```
 
-The web explorer lists base tables; reporting views are accessed through SQL.
+The explorer groups its dropdown into Tables and Reports and audit views. Choose a
+report and press Refresh to inspect statements, summaries, staffing, and portfolios.
+The SQL queries above provide the same reports directly.
 
 ## Updating loan procedures
 
@@ -126,16 +128,20 @@ python demo-app/install_loans.py --database CooperativeBankDemo
 This replaces installed loan routines without resetting table data. Restart the
 server after backend code changes, then reload the browser.
 
-**Current build distinction:** the demo installer extracts the five loan procedures
-without running the loan file's independent demonstration inserts or verification
-queries. It supplies the required disbursement type/status and allocation LoanID
-fields and adds the `LinkLoanGuarantor` helper. These adjustments affect installed
-demo routines and leave the source SQL intact.
+To refresh loan routines, reporting views, and indexes together in an existing demo:
 
-The standalone numbered SQL build still needs those compatibility fixes and
-corrections to its embedded demo IFSC and employee role. Use the Python setup for
-the presentation. `scripts/run_all.sh` executes the unadjusted loan file and is
-not equivalent to the demo setup.
+```powershell
+python demo-app/setup_demo.py --update --name CooperativeBankDemo
+```
+
+This retains table records and skips indexes already installed with matching columns.
+It does not migrate table definitions or reload sample data. For schema changes,
+create a fresh demo database under a new name or prepare an explicit migration.
+
+Loan procedures are installed directly from `database/05_loans.sql`, with no SQL
+compatibility rewrites. The demo also installs `LinkLoanGuarantor` for its guarantor
+form. `scripts/run_all.sh` builds the numbered SQL files for `CooperativeBank`; the
+Python setup chooses a separate presentation database and adds that demo helper.
 
 ## Tests
 
@@ -151,7 +157,7 @@ python -B demo-app/check_integration.py
 ```
 
 The integration check covers banking, the loan lifecycle through closure, rejected
-operations, and table endpoints. It currently uses the standard MySQL 8.0 Windows
+operations, table/report endpoints, reporting consistency, installed indexes, and repeatable updates. It currently uses the standard MySQL 8.0 Windows
 client path and the `local` login path.
 
 Run the core schema, constraints, seed, and banking tests:
@@ -185,9 +191,9 @@ database/
   02_loan_dates.sql             Loan event chronology
   03_seed_data.sql              Representative sample records
   04_transactions.sql          Deposit, withdrawal, and transfer
-  05_loans.sql                 Loan procedures and standalone demo data
+  05_loans.sql                 Loan lifecycle procedures
   06_views.sql                 Reporting and integrity views
-  07_indexes.sql               Indexing placeholder
+  07_indexes.sql               Transaction date and account/date indexes
 demo-app/                     Frontend, Python server, setup, and tests
 docs/                         Proposal, problem statement, ER, and design documents
 experiments/concurrency/       Lost-update and locking/isolation demonstrations
@@ -206,13 +212,12 @@ tests/                        Core integration tests and SQL reporting checks
 
 ## Current limits and remaining work
 
-- Finish the standalone numbered SQL build as described above.
 - Complete CRUD demonstrations, remaining integrity cases, and access grants for
   the whole application. The existing `cooperative_account_operator` role covers
   account/banking operations, not the full demo.
 - Update the ER diagram for nominees and add the UML class diagram.
-- Complete measured indexing and query-optimization experiments; those results
-  are not included yet, and `07_indexes.sql` remains a placeholder.
+- Measure the performance impact of the implemented indexes and complete query-
+  optimization case studies. Index definitions exist; benchmark results are still needed.
 - Capture actual concurrency experiment outputs and assemble the final report.
 
 Ordinary deposits, withdrawals, and transfers support Savings and Current accounts.

@@ -1,5 +1,6 @@
 """Exercise actual MySQL procedures and HTTP endpoints in a disposable database."""
 import json
+from pathlib import Path
 import threading
 import uuid
 from urllib.request import Request, urlopen
@@ -28,6 +29,21 @@ try:
     assert sum(o['available'] for o in config['operations']) == 12
     for table in config['tables']:
         assert get('/api/table?name=' + table)['columns']
+    assert len(config['views']) == 10
+    for view in config['views']:
+        result = get('/api/table?name=' + view)
+        assert result['columns'] and result['keys'] == server.VIEW_KEYS[view]
+    statement = get('/api/table?name=v_customer_statement')
+    identities = [tuple(row[k] for k in statement['keys']) for row in statement['rows']]
+    assert len(identities) == len(set(identities))
+    snapshot = {table: server.rows('SELECT * FROM `' + table + '`') for table in config['tables']}
+    setup_demo.update_demo(name)
+    setup_demo.update_demo(name)
+    assert snapshot == {table: server.rows('SELECT * FROM `' + table + '`') for table in config['tables']}
+    indexes = server.rows("SELECT DISTINCT INDEX_NAME FROM information_schema.STATISTICS "
+                          "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='BankTransaction' "
+                          "AND INDEX_NAME IN ('ix_transaction_date','ix_transaction_account_date')")
+    assert len(indexes) == 2
     for asset in ['/', '/app.js', '/style.css']:
         with urlopen(base + asset) as response:
             assert response.status == 200
@@ -81,12 +97,15 @@ try:
     except HTTPError as error:
         assert error.code == 400
     assert server.rows('SELECT Balance FROM Account WHERE AccountNo=1001') == before
+    checks = (Path(__file__).resolve().parent.parent / 'tests' / 'report_views_checks.sql').read_text()
+    checks = checks.replace('USE CooperativeBank;', 'USE `' + name + '`;')
+    assert not any(server.query(checks)), 'Reporting checks found inconsistencies'
     try:
         urlopen(Request(base + '/api/operate', data=b'{}'))
         raise AssertionError('Missing token was accepted')
     except HTTPError as error:
         assert error.code == 403
-    print('PASS: 12 operations, full loan lifecycle through closure, rejection, 21 tables, rollback, and token protection.')
+    print('PASS: 12 operations, 21 tables, 10 views, reporting checks, both indexes, repeatable updates preserving data, rollback, and token protection.')
 finally:
     if httpd:
         httpd.shutdown()

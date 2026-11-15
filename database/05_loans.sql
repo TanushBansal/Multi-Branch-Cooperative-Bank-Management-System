@@ -15,126 +15,156 @@
 -- Run after:
 -- 01_schema.sql
 -- 02_constraints_triggers.sql
--- =====================================================
 
 USE CooperativeBank;
+
 
 -- =====================================================
 -- PART 1: LOAN MODULE DEMONSTRATION DATASET
 -- =====================================================
 
-START TRANSACTION;
+-- 1. Create demo bank if it does not exist
 
--- 1. Create demo bank
+SELECT BankID INTO @demo_bank_id
+FROM Bank
+WHERE BankName = 'Demo Cooperative Bank'
+LIMIT 1;
 
 INSERT INTO Bank (BankName)
-VALUES ('Demo Cooperative Bank');
+SELECT 'Demo Cooperative Bank'
+WHERE @demo_bank_id IS NULL;
 
-SET @demo_bank_id = LAST_INSERT_ID();
+SET @demo_bank_id = IFNULL(@demo_bank_id, LAST_INSERT_ID());
 
 
--- 2. Create demo branch
+-- 2. Create demo branch if it does not exist
+
+SELECT BranchID INTO @demo_branch_id
+FROM Branch
+WHERE IFSC = 'DEMO0IND001'
+LIMIT 1;
 
 INSERT INTO Branch
 (BankID, IFSC, BranchName, Address)
-VALUES
-(@demo_bank_id, 'DEMO0IND001', 'Indore Main Branch',
- 'Vijay Nagar, Indore, Madhya Pradesh');
+SELECT
+@demo_bank_id, 'DEMO0IND001', 'Indore Main Branch',
+'Vijay Nagar, Indore, Madhya Pradesh'
+WHERE @demo_branch_id IS NULL;
 
-SET @demo_branch_id = LAST_INSERT_ID();
+SET @demo_branch_id = IFNULL(@demo_branch_id, LAST_INSERT_ID());
 
 
--- 3. Create branch employee
+-- 3. Create demo employee if it does not exist
+
+SELECT EmployeeID INTO @demo_employee_id
+FROM Employee
+WHERE Email = 'rahul.demo@bank.com'
+LIMIT 1;
 
 INSERT INTO Employee
 (BranchID, EmployeeName, Phone, Email)
-VALUES
-(@demo_branch_id, 'Rahul Sharma', '9876500001',
- 'rahul.demo@bank.com');
+SELECT
+@demo_branch_id, 'Rahul Sharma', '9876500001',
+'rahul.demo@bank.com'
+WHERE @demo_employee_id IS NULL;
 
-SET @demo_employee_id = LAST_INSERT_ID();
+SET @demo_employee_id = IFNULL(@demo_employee_id, LAST_INSERT_ID());
 
 
--- 4. Make employee a manager
+-- 4. Make employee a manager if not already a manager
 
 INSERT INTO Manager (EmployeeID)
-VALUES (@demo_employee_id);
+SELECT @demo_employee_id
+WHERE NOT EXISTS (
+    SELECT 1 FROM Manager
+    WHERE EmployeeID = @demo_employee_id
+);
 
 
--- 5. Create demo customer
+-- 5. Create demo customer if it does not exist
+
+SELECT CustomerID INTO @demo_customer_id
+FROM Customer
+WHERE PAN = 'ABCDE1234F'
+LIMIT 1;
 
 INSERT INTO Customer
 (CustomerName, Phone, Email, PAN, Address)
-VALUES
-('Aman Verma', '9876500002',
- 'aman.demo@gmail.com', 'ABCDE1234F',
- 'Indore, Madhya Pradesh');
+SELECT
+'Aman Verma', '9876500002',
+'aman.demo@gmail.com', 'ABCDE1234F',
+'Indore, Madhya Pradesh'
+WHERE @demo_customer_id IS NULL;
 
-SET @demo_customer_id = LAST_INSERT_ID();
+SET @demo_customer_id = IFNULL(@demo_customer_id, LAST_INSERT_ID());
 
 
--- 6. Create customer savings account
+-- 6. Create customer savings account if it does not exist
 
 INSERT INTO Account
 (AccountNo, BranchID, AccountType, Balance, Status, OpenedOn)
-VALUES
-(9001000001, @demo_branch_id, 'SAVINGS',
- 500000.00, 'ACTIVE', '2026-01-01');
+SELECT
+9001000001, @demo_branch_id, 'SAVINGS',
+500000.00, 'ACTIVE', '2026-01-01'
+WHERE NOT EXISTS (
+    SELECT 1 FROM Account
+    WHERE AccountNo = 9001000001
+);
 
 
--- 7. Connect customer with account
+-- 7. Connect customer with account if not already connected
 
 INSERT INTO AccountHolder (CustomerID, AccountNo)
-VALUES
-(@demo_customer_id, 9001000001);
+SELECT @demo_customer_id, 9001000001
+WHERE NOT EXISTS (
+    SELECT 1 FROM AccountHolder
+    WHERE CustomerID = @demo_customer_id
+    AND AccountNo = 9001000001
+);
 
 
--- 8. Create savings account details
+-- 8. Create savings account details if missing
 
 INSERT INTO SavingsAccount
 (AccountNo, InterestRate, MinimumBalance)
-VALUES
-(9001000001, 4.00, 1000.00);
+SELECT 9001000001, 4.00, 1000.00
+WHERE NOT EXISTS (
+    SELECT 1 FROM SavingsAccount
+    WHERE AccountNo = 9001000001
+);
 
 
--- 9. Create demo guarantor
+-- 9. Create demo guarantor if it does not exist
+
+SELECT GuarantorID INTO @demo_guarantor_id
+FROM Guarantor
+WHERE PAN = 'FGHIJ5678K'
+LIMIT 1;
 
 INSERT INTO Guarantor
 (GuarantorName, Phone, PAN, Address)
-VALUES
-('Rohan Mehta', '9876500003',
- 'FGHIJ5678K', 'Indore, Madhya Pradesh');
+SELECT
+'Rohan Mehta', '9876500003',
+'FGHIJ5678K', 'Indore, Madhya Pradesh'
+WHERE @demo_guarantor_id IS NULL;
 
-SET @demo_guarantor_id = LAST_INSERT_ID();
-
-
-COMMIT;
+SET @demo_guarantor_id = IFNULL(@demo_guarantor_id, LAST_INSERT_ID());
 
 
 -- =====================================================
 -- PART 2: VERIFY DEMONSTRATION DATASET
 -- =====================================================
 
--- Bank and branch
-
-SELECT *
-FROM Bank
+SELECT * FROM Bank
 WHERE BankID = @demo_bank_id;
 
-SELECT *
-FROM Branch
+SELECT * FROM Branch
 WHERE BranchID = @demo_branch_id;
-
-
--- Manager details
 
 SELECT E.*, M.EmployeeID AS ManagerID
 FROM Employee E
 JOIN Manager M ON E.EmployeeID = M.EmployeeID
 WHERE E.EmployeeID = @demo_employee_id;
-
-
--- Customer and account details
 
 SELECT
     C.CustomerID,
@@ -152,27 +182,149 @@ JOIN Account A ON AH.AccountNo = A.AccountNo
 JOIN SavingsAccount S ON A.AccountNo = S.AccountNo
 WHERE C.CustomerID = @demo_customer_id;
 
-
--- Guarantor details
-
-SELECT *
-FROM Guarantor
+SELECT * FROM Guarantor
 WHERE GuarantorID = @demo_guarantor_id;
 
 
 -- =====================================================
 -- PART 3: LOAN PROCEDURES
--- Will be implemented below.
 -- =====================================================
+
+
+-- PROCEDURE 1: APPLY FOR A LOAN
+
+DROP PROCEDURE IF EXISTS ApplyLoan;
 
 DELIMITER $$
 
--- Procedures will be added here.
+CREATE PROCEDURE ApplyLoan(
+    IN p_customer_id INT,
+    IN p_branch_id INT,
+    IN p_loan_type VARCHAR(50),
+    IN p_requested_amount DECIMAL(15,2),
+    IN p_purpose VARCHAR(100)
+)
+BEGIN
+
+    DECLARE v_count INT DEFAULT 0;
+    DECLARE v_application_id INT;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        RESIGNAL;
+    END;
+
+    -- Check requested amount
+
+    IF p_requested_amount IS NULL OR p_requested_amount <= 0 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Requested amount must be positive';
+    END IF;
+
+    -- Check loan type
+
+    IF p_loan_type IS NULL OR TRIM(p_loan_type) = '' THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Loan type cannot be empty';
+    END IF;
+
+    -- Check purpose
+
+    IF p_purpose IS NULL OR TRIM(p_purpose) = '' THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Loan purpose cannot be empty';
+    END IF;
+
+    -- Check customer
+
+    SELECT COUNT(*)
+    INTO v_count
+    FROM Customer
+    WHERE CustomerID = p_customer_id;
+
+    IF v_count = 0 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Customer does not exist';
+    END IF;
+
+    -- Check branch
+
+    SELECT COUNT(*)
+    INTO v_count
+    FROM Branch
+    WHERE BranchID = p_branch_id;
+
+    IF v_count = 0 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Branch does not exist';
+    END IF;
+
+    START TRANSACTION;
+
+    INSERT INTO LoanApplication
+    (
+        CustomerID,
+        BranchID,
+        ApplicationDate,
+        LoanType,
+        RequestedAmount,
+        Purpose,
+        Status
+    )
+    VALUES
+    (
+        p_customer_id,
+        p_branch_id,
+        CURDATE(),
+        p_loan_type,
+        p_requested_amount,
+        p_purpose,
+        'PENDING'
+    );
+
+    SET v_application_id = LAST_INSERT_ID();
+
+    COMMIT;
+
+    SELECT
+        v_application_id AS ApplicationID,
+        'PENDING' AS ApplicationStatus,
+        'Loan application submitted successfully' AS Message;
+
+END $$
 
 DELIMITER ;
 
 
 -- =====================================================
--- PART 4: LOAN TRANSACTION TEST CASES
--- Will be added after procedure implementation.
+-- PART 4: TEST CASES
 -- =====================================================
+
+-- Test 1: Successful loan application
+
+CALL ApplyLoan(
+    @demo_customer_id,
+    @demo_branch_id,
+    'PERSONAL',
+    200000.00,
+    'Home renovation'
+);
+
+
+-- Verify loan application
+
+SELECT * FROM LoanApplication;
+
+
+-- Test 2: Invalid loan amount
+-- Uncomment to test the error
+
+CALL ApplyLoan(
+    @demo_customer_id,
+    @demo_branch_id,
+    'PERSONAL',
+    50000.00,
+    'Home renovation'
+);
+SELECT * FROM LoanApplication;

@@ -1,12 +1,3 @@
--- Deposit, withdrawal, and intra-/inter-branch transfer procedures.
--- Run after 01_schema.sql and 02_constraints_triggers.sql.
--- Each CALL owns its transaction; call outside an existing transaction.
--- RequestID is unique across all operations. Duplicate requests raise an
--- error and never apply a second balance change. Failed calls leave no log.
--- Amounts must be positive, fit DECIMAL(15,2), and contain whole cents.
--- Ordinary operations support active Savings/Current accounts only.
--- FD funding, maturity, and closure belong to a separate workflow.
--- Deadlocks/timeouts roll back the whole call; callers may retry it.
 
 USE CooperativeBank;
 
@@ -208,7 +199,6 @@ BEGIN
     START TRANSACTION;
     SET v_Started = TRUE;
 
-    -- Always lock the smaller account number first, including reverse transfers.
     SELECT AccountNo INTO v_LockedAccountNo FROM Account
     WHERE AccountNo = LEAST(p_FromAccountNo, p_ToAccountNo) FOR UPDATE;
     IF v_LockedAccountNo IS NULL THEN
@@ -235,8 +225,7 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ordinary transfers cannot use fixed deposit accounts';
     END IF;
 
-    -- Branches may differ, but both must belong to the same bank.
-    -- Shared locks prevent branch reassignment during the transfer.
+
     SELECT BankID INTO v_FromBankID FROM Branch
     WHERE BranchID = v_FromBranchID FOR SHARE;
     SELECT BankID INTO v_ToBankID FROM Branch
@@ -279,8 +268,3 @@ END$$
 
 DELIMITER ;
 
--- Examples (replace account numbers and use a new RequestID for each operation):
--- CALL Deposit(1001, 500.00, 'BRANCH', 'deposit-001', @TransactionID);
--- CALL Withdraw(1001, 100.00, 'ATM', 'withdrawal-001', @TransactionID);
--- CALL Transfer(1001, 2001, 250.00, 'ONLINE', 'transfer-001', @TransactionID);
--- SELECT @TransactionID;

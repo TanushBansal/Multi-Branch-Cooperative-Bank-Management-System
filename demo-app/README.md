@@ -174,3 +174,20 @@ the app:
 ```powershell
 python demo-app/reports.py transaction_history | mysql --login-path=local CooperativeBankMultiBankDemo
 ```
+
+Report names, columns, and row keys are defined in `demo-app/report_catalog.json`,
+in the same order as the SQL statements. Include both files when sharing a ZIP.
+SQL comments are optional and may be removed without breaking the loader.
+
+## Approval and disbursement are separate stages
+
+ReviewLoan approves or rejects the application in LoanApplication. Approval alone
+does not create a Loan or credit funds: the payout account, interest rate, and tenure
+are supplied in DisburseLoan. After disbursement, inspect Loan and Account, then
+run GenerateInstallments with the returned LoanID. The Next button carries the
+application/loan identifier into the next form without submitting it automatically.
+
+Repayment requires an active Savings/Current payout account and preserves its
+minimum balance. Application and repayment amounts must contain whole cents.
+Loan procedures own their transactions and reject calls inside another active
+transaction without committing or rolling back the caller's work.

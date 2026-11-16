@@ -81,10 +81,19 @@ try:
     operate('OpenFixedDeposit', ['7003','1','1','2026-11-15','2027-11-15','500','6','web-fd'])
     application = operate('ApplyLoan', ['1','1','PERSONAL','10000','Presentation test'])
     application_id = application['results'][0][0]['ApplicationID']
+    before_funding = server.rows('SELECT Balance FROM Account WHERE AccountNo=1001')[0]['Balance']
     operate('LinkLoanGuarantor', [application_id, '1'])
-    operate('ReviewLoan', [application_id, '1', 'APPROVED'])
+    reviewed = operate('ReviewLoan', [application_id, '1', 'APPROVED'])
+    assert reviewed['results'][0][0]['ApplicationStatus'] == 'APPROVED'
+    assert not server.rows('SELECT LoanID FROM Loan WHERE ApplicationID=' + application_id)
+    assert server.rows('SELECT Balance FROM Account WHERE AccountNo=1001')[0]['Balance'] == before_funding
+    approved_rows = get('/api/table?name=LoanApplication')['rows']
+    assert any(row['ApplicationID'] == application_id and row['Status'] == 'APPROVED' for row in approved_rows)
     funded = operate('DisburseLoan', [application_id, '1001', '12', '3'])
     loan_id = funded['results'][0][0]['LoanID']
+    assert any(row['LoanID'] == loan_id and row['ApplicationID'] == application_id
+               for row in get('/api/table?name=Loan')['rows'])
+    assert Decimal(server.rows('SELECT Balance FROM Account WHERE AccountNo=1001')[0]['Balance']) == Decimal(before_funding)+10000
     operate('GenerateInstallments', [loan_id])
     assert len(server.rows('SELECT * FROM LoanInstallment WHERE LoanID=' + loan_id)) == 3
     repaid = operate('RepayLoan', [loan_id, '500'])
@@ -95,6 +104,8 @@ try:
     remaining = repaid['results'][0][0]['RemainingAmount']
     operate('RepayLoan', [loan_id, remaining])
     assert server.rows('SELECT Status FROM Loan WHERE LoanID=' + loan_id)[0]['Status'] == 'CLOSED'
+    assert any(row['LoanID'] == loan_id and row['Status'] == 'CLOSED'
+               for row in get('/api/table?name=Loan')['rows'])
     rejected = operate('ApplyLoan', ['1','1','PERSONAL','1000','Rejection test'])
     reject_id = rejected['results'][0][0]['ApplicationID']
     operate('ReviewLoan', [reject_id, '1', 'REJECTED'])

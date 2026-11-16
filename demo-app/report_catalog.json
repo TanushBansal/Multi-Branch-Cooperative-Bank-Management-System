@@ -1,0 +1,191 @@
+[
+  {
+    "name": "transfer_integrity_violations",
+    "columns": [
+      "TransactionID",
+      "Status",
+      "RequestID"
+    ],
+    "keys": [
+      "TransactionID"
+    ]
+  },
+  {
+    "name": "account_overview",
+    "columns": [
+      "AccountNo",
+      "AccountType",
+      "Status",
+      "Balance",
+      "OpenedOn",
+      "BranchID",
+      "BranchName",
+      "MinimumBalance",
+      "InterestRate",
+      "HolderCount",
+      "Holders"
+    ],
+    "keys": [
+      "AccountNo"
+    ]
+  },
+  {
+    "name": "branch_account_summary",
+    "columns": [
+      "BranchID",
+      "BranchName",
+      "IFSC",
+      "TotalAccounts",
+      "SavingsAccounts",
+      "CurrentAccounts",
+      "FixedDeposits",
+      "ActiveAccounts",
+      "FrozenAccounts",
+      "ClosedAccounts",
+      "TotalBalance"
+    ],
+    "keys": [
+      "BranchID"
+    ]
+  },
+  {
+    "name": "branch_staff",
+    "columns": [
+      "BranchID",
+      "BranchName",
+      "TotalEmployees",
+      "Managers",
+      "Clerks",
+      "ManagerNames"
+    ],
+    "keys": [
+      "BranchID"
+    ]
+  },
+  {
+    "name": "transaction_history",
+    "columns": [
+      "TransactionID",
+      "TransactionDate",
+      "TransactionType",
+      "Status",
+      "Channel",
+      "Amount",
+      "RequestID",
+      "SourceAccountNo",
+      "DestinationAccountNo",
+      "SourceBankID",
+      "SourceBankName",
+      "DestinationBankID",
+      "DestinationBankName",
+      "TransferScope"
+    ],
+    "keys": [
+      "TransactionID"
+    ]
+  },
+  {
+    "name": "account_statement",
+    "columns": [
+      "AccountNo",
+      "TransactionID",
+      "TransactionDate",
+      "TransactionType",
+      "Channel",
+      "Status",
+      "CounterpartyAccountNo",
+      "Debit",
+      "Credit",
+      "RunningBalance"
+    ],
+    "keys": [
+      "AccountNo",
+      "TransactionID"
+    ]
+  },
+  {
+    "name": "customer_statement",
+    "columns": [
+      "CustomerID",
+      "CustomerName",
+      "AccountNo",
+      "TransactionID",
+      "TransactionDate",
+      "TransactionType",
+      "Channel",
+      "Status",
+      "CounterpartyAccountNo",
+      "Debit",
+      "Credit",
+      "RunningBalance"
+    ],
+    "keys": [
+      "CustomerID",
+      "AccountNo",
+      "TransactionID"
+    ]
+  },
+  {
+    "name": "loan_portfolio",
+    "columns": [
+      "LoanID",
+      "ApplicationID",
+      "CustomerID",
+      "CustomerName",
+      "BranchID",
+      "BranchName",
+      "LoanType",
+      "SanctionDate",
+      "SanctionAmount",
+      "InterestRate",
+      "TenureMonths",
+      "Status",
+      "InstallmentsGenerated",
+      "ScheduledTotal",
+      "AmountRepaid",
+      "ScheduledOutstanding",
+      "OverdueAmount",
+      "NextUnpaidDueDate"
+    ],
+    "keys": [
+      "LoanID"
+    ]
+  },
+  {
+    "name": "branch_loan_portfolio",
+    "columns": [
+      "BranchID",
+      "BranchName",
+      "TotalLoans",
+      "Sanctioned",
+      "ActiveLoans",
+      "ClosedLoans",
+      "DefaultedLoans",
+      "TotalSanctionedAmount",
+      "TotalScheduledOutstanding",
+      "TotalOverdue",
+      "PendingApplications"
+    ],
+    "keys": [
+      "BranchID"
+    ]
+  },
+  {
+    "name": "pending_applications",
+    "columns": [
+      "ApplicationID",
+      "ApplicationDate",
+      "BranchID",
+      "BranchName",
+      "CustomerID",
+      "CustomerName",
+      "LoanType",
+      "RequestedAmount",
+      "Purpose",
+      "GuarantorsLinked"
+    ],
+    "keys": [
+      "ApplicationID"
+    ]
+  }
+]

@@ -43,15 +43,17 @@
           <label for="operation">Operation</label
           ><select id="operation"></select>
           <p class="procedure-note" id="availability"></p>
+          <p class="procedure-note" id="operation-help"></p>
           <form id="operation-form">
             <div id="fields"></div>
             <button class="primary" id="run" type="submit">Run operation <span>→</span></button>
           </form>
           <div id="result" role="status" aria-live="polite">Choose an operation to begin.</div>
+          <button id="loan-next" type="button" hidden>Continue</button>
           <div id="pending" hidden>
             <h3>Loan lifecycle</h3>
             <p>Apply → Link guarantor → Review → Disburse → Generate installments → Repay</p>
-            <span>Refresh the related tables after each operation.</span>
+            <span>Approval updates LoanApplication. Disbursement creates the Loan record and credits the account.</span>
           </div>
         </section>
         <section class="data-panel">

@@ -28,7 +28,9 @@ def procedure_definitions():
 BEGIN
     INSERT INTO ApplicationGuarantor (ApplicationID, GuarantorID)
     VALUES (p_application_id, p_guarantor_id);
-    SELECT 'Guarantor linked successfully' AS Message;
+    SELECT p_application_id AS ApplicationID,
+           p_guarantor_id AS GuarantorID,
+           'Guarantor linked successfully' AS Message;
 END $$'''
     return definitions
 

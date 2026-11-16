@@ -22,7 +22,7 @@ CREATE PROCEDURE ApplyLoan(
     IN p_customer_id INT,
     IN p_branch_id INT,
     IN p_loan_type VARCHAR(50),
-    IN p_requested_amount DECIMAL(15,2),
+    IN p_requested_amount DECIMAL(19,4),
     IN p_purpose VARCHAR(100)
 )
 BEGIN
@@ -30,15 +30,21 @@ BEGIN
     DECLARE v_count INT DEFAULT 0;
     DECLARE v_application_id INT;
 
+    DECLARE v_started BOOLEAN DEFAULT FALSE;
+
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-        ROLLBACK;
+        IF v_started THEN
+            ROLLBACK;
+        END IF;
         RESIGNAL;
     END;
 
-    IF p_requested_amount IS NULL OR p_requested_amount <= 0 THEN
+    IF p_requested_amount IS NULL OR p_requested_amount <= 0
+       OR p_requested_amount > 9999999999999.99
+       OR p_requested_amount <> ROUND(p_requested_amount, 2) THEN
         SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Requested amount must be positive';
+        SET MESSAGE_TEXT = 'Requested amount must be positive whole cents within DECIMAL(15,2)';
     END IF;
 
     IF p_loan_type IS NULL OR TRIM(p_loan_type) = '' THEN
@@ -71,7 +77,9 @@ BEGIN
         SET MESSAGE_TEXT = 'Branch does not exist';
     END IF;
 
+    SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
     START TRANSACTION;
+    SET v_started = TRUE;
 
     INSERT INTO LoanApplication
     (
@@ -126,13 +134,19 @@ BEGIN
     DECLARE v_manager_branch INT;
     DECLARE v_current_status VARCHAR(20);
 
+    DECLARE v_started BOOLEAN DEFAULT FALSE;
+
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-        ROLLBACK;
+        IF v_started THEN
+            ROLLBACK;
+        END IF;
         RESIGNAL;
     END;
 
+    SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
     START TRANSACTION;
+    SET v_started = TRUE;
 
     IF p_decision IS NULL OR UPPER(TRIM(p_decision)) NOT IN ('APPROVED', 'REJECTED') THEN
         SIGNAL SQLSTATE '45000'
@@ -189,7 +203,12 @@ BEGIN
 
     COMMIT;
 
-    SELECT 'Loan application reviewed successfully' AS Message;
+    SELECT p_application_id AS ApplicationID,
+           UPPER(TRIM(p_decision)) AS ApplicationStatus,
+           CASE WHEN UPPER(TRIM(p_decision)) = 'APPROVED'
+                THEN 'Application approved. Disburse it with payout account, interest rate and tenure to create the Loan record.'
+                ELSE 'Application rejected. No loan or funds were created.'
+           END AS Message;
 
 END $$
 
@@ -215,6 +234,9 @@ BEGIN
     DECLARE v_amount DECIMAL(15,2);
     DECLARE v_status VARCHAR(20);
     DECLARE v_account_status VARCHAR(20);
+    DECLARE v_account_type VARCHAR(10);
+    DECLARE v_account_balance DECIMAL(15,2);
+    DECLARE v_holder INT DEFAULT NULL;
     DECLARE v_transaction_id BIGINT;
     DECLARE v_loan_id INT;
     DECLARE v_loan_status VARCHAR(20);
@@ -223,13 +245,19 @@ BEGIN
     DECLARE v_sanctioned_rate DECIMAL(5,2);
     DECLARE v_sanctioned_tenure INT;
 
+    DECLARE v_started BOOLEAN DEFAULT FALSE;
+
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-        ROLLBACK;
+        IF v_started THEN
+            ROLLBACK;
+        END IF;
         RESIGNAL;
     END;
 
+    SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
     START TRANSACTION;
+    SET v_started = TRUE;
 
     -- Check application
 
@@ -288,27 +316,32 @@ BEGIN
 
     -- Check payout account belongs to customer
 
-    SELECT COUNT(*)
-    INTO v_count
-    FROM Account A
-    JOIN AccountHolder AH ON A.AccountNo = AH.AccountNo
-    WHERE A.AccountNo = p_account_no
-    AND AH.CustomerID = v_customer_id;
-
-    IF v_count = 0 THEN
-        SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Account does not belong to customer';
-    END IF;
-
-    SELECT Status
-    INTO v_account_status
+    SELECT Balance, Status, AccountType
+    INTO v_account_balance, v_account_status, v_account_type
     FROM Account
     WHERE AccountNo = p_account_no
     FOR UPDATE;
 
-    IF v_account_status <> 'ACTIVE' THEN
+    IF v_account_status IS NULL OR v_account_status <> 'ACTIVE' THEN
         SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Payout account is not active';
+        SET MESSAGE_TEXT = 'Payout account is not active or does not exist';
+    END IF;
+    IF v_account_type = 'FD' THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Loan payout requires a Savings or Current account';
+    END IF;
+
+    SELECT CustomerID INTO v_holder
+    FROM AccountHolder
+    WHERE AccountNo = p_account_no AND CustomerID = v_customer_id
+    FOR SHARE;
+    IF v_holder IS NULL THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Account does not belong to customer';
+    END IF;
+    IF v_account_balance + v_amount > 9999999999999.99 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Disbursement would exceed the balance limit';
     END IF;
 
     -- Create disbursement transaction
@@ -383,6 +416,7 @@ BEGIN
     SELECT
         v_loan_id AS LoanID,
         v_amount AS DisbursedAmount,
+        p_application_id AS ApplicationID,
         'Loan disbursed successfully' AS Message;
 
 END $$
@@ -402,8 +436,8 @@ BEGIN
 
     DECLARE v_count INT DEFAULT 0;
     DECLARE v_amount DECIMAL(15,2);
-    DECLARE v_rate DECIMAL(10,8);
-    DECLARE v_monthly_rate DECIMAL(10,8);
+    DECLARE v_rate DECIMAL(7,2);
+    DECLARE v_monthly_rate DECIMAL(16,12);
     DECLARE v_tenure INT;
     DECLARE v_schedule_start DATE;
     DECLARE v_loan_status VARCHAR(20);
@@ -415,13 +449,19 @@ BEGIN
 
     DECLARE v_i INT DEFAULT 1;
 
+    DECLARE v_started BOOLEAN DEFAULT FALSE;
+
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-        ROLLBACK;
+        IF v_started THEN
+            ROLLBACK;
+        END IF;
         RESIGNAL;
     END;
 
+    SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
     START TRANSACTION;
+    SET v_started = TRUE;
 
     -- Check loan
 
@@ -543,13 +583,15 @@ DELIMITER $$
 
 CREATE PROCEDURE RepayLoan(
     IN p_loan_id INT,
-    IN p_amount DECIMAL(15,2)
+    IN p_amount DECIMAL(19,4)
 )
 BEGIN
 
     DECLARE v_account_no BIGINT;
     DECLARE v_loan_status VARCHAR(20);
     DECLARE v_balance DECIMAL(15,2);
+    DECLARE v_account_type VARCHAR(10);
+    DECLARE v_minimum_balance DECIMAL(15,2);
     DECLARE v_outstanding DECIMAL(15,2);
 
     DECLARE v_transaction_id BIGINT;
@@ -560,18 +602,25 @@ BEGIN
     DECLARE v_allocate DECIMAL(15,2);
     DECLARE v_remaining DECIMAL(15,2);
 
+    DECLARE v_started BOOLEAN DEFAULT FALSE;
+
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-        ROLLBACK;
+        IF v_started THEN
+            ROLLBACK;
+        END IF;
         RESIGNAL;
     END;
 
-    IF p_amount IS NULL OR p_amount <= 0 THEN
+    IF p_amount IS NULL OR p_amount <= 0 OR p_amount > 9999999999999.99
+       OR p_amount <> ROUND(p_amount, 2) THEN
         SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Repayment amount must be positive';
+        SET MESSAGE_TEXT = 'Repayment amount must be positive whole cents within DECIMAL(15,2)';
     END IF;
 
+    SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
     START TRANSACTION;
+    SET v_started = TRUE;
 
     -- Lock the loan before opening a consistent-read snapshot.
 
@@ -624,8 +673,8 @@ BEGIN
 
     -- Check account balance
 
-    SELECT Balance
-    INTO v_balance
+    SELECT Balance, AccountType
+    INTO v_balance, v_account_type
     FROM Account
     WHERE AccountNo = v_account_no
     AND Status = 'ACTIVE'
@@ -639,6 +688,21 @@ BEGIN
     IF v_balance < p_amount THEN
         SIGNAL SQLSTATE '45000'
         SET MESSAGE_TEXT = 'Insufficient account balance';
+    END IF;
+
+    IF v_account_type = 'SAVINGS' THEN
+        SELECT MinimumBalance INTO v_minimum_balance
+        FROM SavingsAccount WHERE AccountNo = v_account_no FOR UPDATE;
+    ELSEIF v_account_type = 'CURRENT' THEN
+        SELECT MinimumBalance INTO v_minimum_balance
+        FROM CurrentAccount WHERE AccountNo = v_account_no FOR UPDATE;
+    ELSE
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Repayment requires a Savings or Current account';
+    END IF;
+    IF v_minimum_balance IS NULL OR v_balance - p_amount < v_minimum_balance THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Repayment would violate the account minimum balance';
     END IF;
 
     -- Create repayment transaction
@@ -755,6 +819,11 @@ BEGIN
 
     END;
 
+    IF v_remaining <> 0 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Repayment could not be fully allocated';
+    END IF;
+
     -- Close loan if fully repaid
 
     SELECT
@@ -788,6 +857,8 @@ BEGIN
         v_payment_id AS PaymentID,
         p_amount AS AmountPaid,
         v_outstanding AS RemainingAmount,
+        p_loan_id AS LoanID,
+        IF(v_outstanding = 0, 'CLOSED', 'ACTIVE') AS LoanStatus,
         'Repayment recorded successfully' AS Message;
 
 END $$

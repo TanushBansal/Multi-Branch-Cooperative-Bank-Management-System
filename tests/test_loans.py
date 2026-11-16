@@ -85,6 +85,68 @@ class LoanTests(unittest.TestCase):
         self.sql(f"CALL GenerateInstallments({loan});")
         return loan
 
+    def pending_application(self):
+        return int(self.sql("CALL ApplyLoan(1,1,'PERSONAL',5000,'Pipeline test');").split('\t')[0])
+
+    def test_approval_is_separate_from_disbursement(self):
+        application = self.pending_application()
+        before = self.sql('SELECT Balance FROM Account WHERE AccountNo=1001;')
+        self.assert_rejected(f"CALL ReviewLoan({application},1,'APPROVED');", 'guarantor')
+        self.sql(f'INSERT INTO ApplicationGuarantor VALUES ({application},1);')
+        self.assert_rejected(f"CALL ReviewLoan({application},3,'APPROVED');", 'different branch')
+        self.sql(f"CALL ReviewLoan({application},1,'APPROVED');")
+        self.assertEqual(self.sql(f'SELECT Status FROM LoanApplication WHERE ApplicationID={application};'), 'APPROVED')
+        self.assertEqual(self.sql(f'SELECT COUNT(*) FROM Loan WHERE ApplicationID={application};'), '0')
+        self.assertEqual(self.sql('SELECT Balance FROM Account WHERE AccountNo=1001;'), before)
+        loan = int(self.sql(f'CALL DisburseLoan({application},1001,12,3);').split('\t')[0])
+        self.assertEqual(self.sql(f'SELECT ApplicationID,Status FROM Loan WHERE LoanID={loan};'), f'{application}\tACTIVE')
+
+    def test_disbursement_rejects_invalid_accounts_without_moving_funds(self):
+        application = self.pending_application()
+        self.sql(f'INSERT INTO ApplicationGuarantor VALUES ({application},1);')
+        self.sql(f"CALL ReviewLoan({application},1,'APPROVED');")
+        before = self.sql('SELECT AccountNo,Balance FROM Account ORDER BY AccountNo; SELECT COUNT(*) FROM BankTransaction;')
+        for account, error in [(999999,'does not exist'), (1002,'does not belong'),
+                               (1004,'not active'), (1003,'Savings or Current')]:
+            self.assert_rejected(f'CALL DisburseLoan({application},{account},12,3);', error)
+            self.assertEqual(self.sql('SELECT AccountNo,Balance FROM Account ORDER BY AccountNo; SELECT COUNT(*) FROM BankTransaction;'), before)
+        self.assertEqual(self.sql(f'SELECT COUNT(*) FROM Loan WHERE ApplicationID={application};'), '0')
+
+    def test_repayment_preserves_minimum_balance_and_rejects_fractional_cents(self):
+        loan = self.new_loan()
+        self.sql("CALL Withdraw(1001,(SELECT Balance-1100 FROM Account WHERE AccountNo=1001),'BRANCH','loan-minimum-test',@tx);")
+        before = self.sql('SELECT Balance FROM Account WHERE AccountNo=1001; SELECT COUNT(*) FROM Repayment; SELECT COUNT(*) FROM BankTransaction;')
+        self.assert_rejected(f'CALL RepayLoan({loan},500);', 'minimum balance')
+        self.assert_rejected(f'CALL RepayLoan({loan},0.001);', 'whole cents')
+        self.assert_rejected("CALL ApplyLoan(1,1,'PERSONAL',1000.001,'Rounding test');", 'whole cents')
+        self.assertEqual(self.sql('SELECT Balance FROM Account WHERE AccountNo=1001; SELECT COUNT(*) FROM Repayment; SELECT COUNT(*) FROM BankTransaction;'), before)
+
+    def test_loan_calls_preserve_an_existing_caller_transaction(self):
+        calls = ["ApplyLoan(1,1,'PERSONAL',1000,'Nested test')",
+                 "ReviewLoan(99999,1,'APPROVED')", 'DisburseLoan(99999,1001,12,3)',
+                 'GenerateInstallments(99999)', 'RepayLoan(99999,1)']
+        before = self.sql('SELECT Phone FROM Customer WHERE CustomerID=1;')
+        for call in calls:
+            with self.subTest(call=call):
+                result = subprocess.run(self.client()+['--force'], input=(
+                    "START TRANSACTION; UPDATE Customer SET Phone='nested-probe' WHERE CustomerID=1; "
+                    'CALL '+call+'; SELECT Phone FROM Customer WHERE CustomerID=1; ROLLBACK;'),
+                    text=True, encoding='utf-8', capture_output=True, timeout=60)
+                self.assertIn("Transaction characteristics can't be changed", result.stderr)
+                self.assertEqual(result.stdout.strip(), 'nested-probe')
+                self.assertEqual(self.sql('SELECT Phone FROM Customer WHERE CustomerID=1;'), before)
+
+    def test_concurrent_disbursements_credit_once(self):
+        application = self.pending_application()
+        self.sql(f'INSERT INTO ApplicationGuarantor VALUES ({application},1);')
+        self.sql(f"CALL ReviewLoan({application},1,'APPROVED');")
+        before = Decimal(self.sql('SELECT Balance FROM Account WHERE AccountNo=1001;'))
+        with ThreadPoolExecutor(max_workers=2) as workers:
+            results = list(workers.map(lambda _: self.run_sql(f'CALL DisburseLoan({application},1001,12,3);'), range(2)))
+        self.assertEqual(sum(result.returncode == 0 for result in results), 1)
+        self.assertEqual(Decimal(self.sql('SELECT Balance FROM Account WHERE AccountNo=1001;')), before+5000)
+        self.assertEqual(self.sql(f'SELECT COUNT(*) FROM Loan WHERE ApplicationID={application};'), '1')
+
     def test_fund_seeded_sanction_once_and_generate_schedule(self):
         self.assert_rejected("CALL DisburseLoan(3,3002,8,6);", "must match the sanction")
         self.assertEqual(self.sql("SELECT Status FROM Loan WHERE LoanID=3;"), "SANCTIONED")

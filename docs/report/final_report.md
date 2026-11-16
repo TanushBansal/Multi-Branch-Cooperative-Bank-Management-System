@@ -84,7 +84,7 @@ The [demo application](../../demo-app/README.md) uses a separate seeded schema. 
 | Check | Recorded evidence |
 |---|---|
 | [Smoke test](../../tests/smoke_tests.sql) and [report assertions](../../tests/report_checks.sql) | Both returned empty sets after rebuilding the database. |
-| [Loan integration tests](../../tests/test_loans.py) | Three tests passed on MySQL 8.0.46 against the final loan routines, covering seeded funding, duplicate operations, repayment allocation and concurrency. |
+| [Loan integration tests](../../tests/test_loans.py) | Eight tests passed against the loan routines, covering approval versus disbursement, account eligibility, seeded funding, concurrent operations, repayment allocation, minimum balances, monetary precision and caller transaction preservation. |
 | [Demo unit tests](../../demo-app/test_server.py) | Five tests passed. |
 | [Demo HTTP integration](../../demo-app/check_integration.py) | The run reported PASS for 12 operations, 21 tables, ten direct reports, both indexes, reporting checks, data-preserving updates, rollback and token protection. |
 

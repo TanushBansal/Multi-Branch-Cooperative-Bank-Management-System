@@ -1,27 +1,74 @@
 """Direct report queries shared by the demo, SQL checks, and integration tests."""
 from pathlib import Path
+import json
 import re
 
 SOURCE = Path(__file__).resolve().parent.parent / 'database' / '06_reports.sql'
-HEADER = re.compile(
-    r'^-- report: (\w+)\n-- columns: ([^\n]+)\n-- keys: ([^\n]+)\n', re.M
-)
+CATALOG = Path(__file__).resolve().parent / 'report_catalog.json'
 
 
-def load_reports():
-    text = SOURCE.read_text(encoding='utf-8-sig')
-    headers = list(HEADER.finditer(text))
+def split_statements(text):
+    """Split SQL while preserving quoted values and ignoring optional comments."""
+    statements, current = [], []
+    i, quote = 0, None
+    while i < len(text):
+        char = text[i]
+        if quote:
+            current.append(char)
+            if char == '\\' and i + 1 < len(text):
+                i += 1
+                current.append(text[i])
+            elif char == quote:
+                if i + 1 < len(text) and text[i + 1] == quote:
+                    i += 1
+                    current.append(text[i])
+                else:
+                    quote = None
+        elif char in "'\"`":
+            quote = char
+            current.append(char)
+        elif (text.startswith('--', i) and
+              (i + 2 == len(text) or text[i + 2].isspace())) or char == '#':
+            end = text.find('\n', i)
+            i = end if end != -1 else len(text)
+            current.append('\n')
+        elif text.startswith('/*', i):
+            end = text.find('*/', i + 2)
+            if end == -1:
+                raise ValueError('Unclosed SQL comment in report queries')
+            i = end + 1
+            current.append(' ')
+        elif char == ';':
+            if ''.join(current).strip():
+                statements.append(''.join(current).strip())
+            current = []
+        else:
+            current.append(char)
+        i += 1
+    if quote:
+        raise ValueError('Unclosed quoted value in report queries')
+    if ''.join(current).strip():
+        statements.append(''.join(current).strip())
+    return statements
+
+
+def load_reports(source=SOURCE, catalog=CATALOG):
+    metadata = json.loads(Path(catalog).read_text(encoding='utf-8-sig'))
+    statements = split_statements(Path(source).read_text(encoding='utf-8-sig'))
+    queries = [sql for sql in statements if not re.fullmatch(r'USE\s+`?\w+`?', sql, re.I)]
+    if len(queries) != len(metadata):
+        raise ValueError(f'Expected {len(metadata)} report queries in {source}; found {len(queries)}')
     result = {}
-    for i, header in enumerate(headers):
-        end = headers[i + 1].start() if i + 1 < len(headers) else len(text)
-        name, columns, keys = header.groups()
-        result[name] = {
-            'sql': text[header.end():end].strip().removesuffix(';'),
-            'columns': columns.split(', '),
-            'keys': keys.split(', '),
-        }
-    if len(result) != 10:
-        raise ValueError('Expected ten report queries in ' + str(SOURCE))
+    # Catalog order matches the standalone SELECT/WITH statements in the SQL file.
+    for report, sql in zip(metadata, queries):
+        if not re.match(r'^(SELECT|WITH)\b', sql, re.I):
+            raise ValueError('Report must be a SELECT or WITH query: ' + report['name'])
+        name = report['name']
+        if name in result or not re.fullmatch(r'[a-z_]+', name):
+            raise ValueError('Invalid or duplicate report name: ' + name)
+        if not report['columns'] or not report['keys'] or not set(report['keys']) <= set(report['columns']):
+            raise ValueError('Invalid columns or keys for report: ' + name)
+        result[name] = {'sql': sql, 'columns': report['columns'], 'keys': report['keys']}
     return result
 
 

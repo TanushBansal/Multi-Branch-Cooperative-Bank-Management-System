@@ -94,6 +94,10 @@ Use these seeded IDs in a newly created demo database:
 | 7 | Generate installments using that loan ID | LoanInstallment |
 | 8 | Repay `500` against that loan | Account, BankTransaction, Repayment, PaymentAllocation |
 
+Approval changes `LoanApplication` only. `DisburseLoan` creates the Loan record
+and credits funds after you supply the payout account, rate, and tenure. The loan
+forms show this distinction and offer a Next button with the returned ID prefilled.
+
 The interface generates banking RequestIDs. Reusing one is rejected without moving
 funds again. Use a new application for another loan demonstration; an application
 cannot be disbursed twice.

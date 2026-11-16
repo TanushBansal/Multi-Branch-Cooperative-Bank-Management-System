@@ -19,6 +19,16 @@ const titles = {
   GenerateInstallments: 'Generate installments',
   RepayLoan: 'Repay a loan',
 };
+const loanContext = { applicationId: null, loanId: null };
+const loanHelp = {
+  ApplyLoan: 'Creates a pending application in LoanApplication.',
+  LinkLoanGuarantor: 'Link an existing guarantor before approving the application.',
+  ReviewLoan: 'Approval updates LoanApplication only. Use Disburse a loan next to supply the payout account, rate, and tenure.',
+  DisburseLoan: 'Creates the Loan record and credits the account. For an existing sanction, enter its original payout account, rate, and tenure.',
+  GenerateInstallments: 'Creates the monthly schedule in LoanInstallment. Use the LoanID returned by disbursement.',
+  RepayLoan: 'Debits the payout account, records Repayment and PaymentAllocation, and closes a fully repaid loan.',
+};
+let nextLoanOperation = null;
 async function api(path, options) {
   const response = await fetch(path, options);
   const data = await response.json();
@@ -42,6 +52,9 @@ function renderForm() {
   const op = config.operations.find((o) => o.name === $('operation').value);
   $('fields').replaceChildren();
   if (!op) return;
+  $('operation-help').textContent = loanHelp[op.name] || '';
+  $('loan-next').hidden = true;
+  nextLoanOperation = null;
   $('availability').textContent = op.available
     ? op.name + ' · Installed in MySQL'
     : op.name + ' · Not installed in this database';
@@ -73,6 +86,12 @@ function renderForm() {
     if (p.CHARACTER_MAXIMUM_LENGTH) input.maxLength = Number(p.CHARACTER_MAXIMUM_LENGTH);
     if (/request/i.test(p.PARAMETER_NAME)) input.value = crypto.randomUUID();
     if (/channel/i.test(p.PARAMETER_NAME)) input.value = 'BRANCH';
+    if (p.PARAMETER_NAME === 'p_application_id' && loanContext.applicationId) {
+      input.value = loanContext.applicationId;
+    }
+    if (p.PARAMETER_NAME === 'p_loan_id' && loanContext.loanId) {
+      input.value = loanContext.loanId;
+    }
     wrapper.append(caption, input);
     $('fields').append(wrapper);
   }
@@ -165,16 +184,19 @@ $('operation-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   if (busy) return;
   busy = true;
+  nextLoanOperation = null;
+  $('loan-next').hidden = true;
   $('run').disabled = true;
   $('operation').disabled = true;
   $('result').className = '';
   $('result').textContent = 'Executing operation…';
   try {
     const values = Object.fromEntries(new FormData(event.target));
+    const operation = $('operation').value;
     const data = await api('/api/operate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Demo-Token': config.token },
-      body: JSON.stringify({ operation: $('operation').value, values }),
+      body: JSON.stringify({ operation, values }),
     });
     $('result').className = 'success';
     $('result').textContent =
@@ -187,6 +209,29 @@ $('operation-form').addEventListener('submit', async (event) => {
             .join('\n'),
         )
         .join('\n');
+    const returned = Object.assign({}, ...data.results.flat());
+    if (operation === 'ApplyLoan') loanContext.loanId = null;
+    const applicationId = returned.ApplicationID || values.p_application_id;
+    if (applicationId) {
+      if (applicationId !== loanContext.applicationId) loanContext.loanId = null;
+      loanContext.applicationId = applicationId;
+    }
+    if (returned.LoanID || values.p_loan_id) {
+      loanContext.loanId = returned.LoanID || values.p_loan_id;
+    }
+    const nextSteps = {
+      ApplyLoan: 'LinkLoanGuarantor',
+      LinkLoanGuarantor: 'ReviewLoan',
+      ReviewLoan: values.p_decision === 'APPROVED' ? 'DisburseLoan' : null,
+      DisburseLoan: 'GenerateInstallments',
+      GenerateInstallments: 'RepayLoan',
+      RepayLoan: Number(returned.RemainingAmount) > 0 ? 'RepayLoan' : null,
+    };
+    nextLoanOperation = nextSteps[operation] || null;
+    $('loan-next').hidden = !nextLoanOperation;
+    if (nextLoanOperation) {
+      $('loan-next').textContent = 'Next: ' + titles[nextLoanOperation];
+    }
     document.querySelectorAll('#fields input').forEach((input) => {
       if (/request/i.test(input.name)) input.value = crypto.randomUUID();
     });
@@ -200,6 +245,12 @@ $('operation-form').addEventListener('submit', async (event) => {
   }
 });
 $('operation').addEventListener('change', renderForm);
+$('loan-next').addEventListener('click', () => {
+  if (busy || !nextLoanOperation) return;
+  $('operation').value = nextLoanOperation;
+  renderForm();
+  $('fields').querySelector('input, select')?.focus();
+});
 $('refresh').addEventListener('click', refresh);
 $('table').addEventListener('change', () => {
   page = 0;

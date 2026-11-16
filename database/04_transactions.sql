@@ -165,10 +165,6 @@ BEGIN
     DECLARE v_ToStatus VARCHAR(10);
     DECLARE v_FromType VARCHAR(10);
     DECLARE v_ToType VARCHAR(10);
-    DECLARE v_FromBranchID INT;
-    DECLARE v_ToBranchID INT;
-    DECLARE v_FromBankID INT;
-    DECLARE v_ToBankID INT;
     DECLARE v_MinimumBalance DECIMAL(15,2);
     DECLARE v_Started BOOLEAN DEFAULT FALSE;
 
@@ -211,11 +207,11 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Account does not exist';
     END IF;
 
-    SELECT Balance, Status, AccountType, BranchID
-    INTO v_FromBalance, v_FromStatus, v_FromType, v_FromBranchID
+    SELECT Balance, Status, AccountType
+    INTO v_FromBalance, v_FromStatus, v_FromType
     FROM Account WHERE AccountNo = p_FromAccountNo FOR UPDATE;
-    SELECT Balance, Status, AccountType, BranchID
-    INTO v_ToBalance, v_ToStatus, v_ToType, v_ToBranchID
+    SELECT Balance, Status, AccountType
+    INTO v_ToBalance, v_ToStatus, v_ToType
     FROM Account WHERE AccountNo = p_ToAccountNo FOR UPDATE;
 
     IF v_FromStatus <> 'ACTIVE' OR v_ToStatus <> 'ACTIVE' THEN
@@ -223,15 +219,6 @@ BEGIN
     END IF;
     IF v_FromType = 'FD' OR v_ToType = 'FD' THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ordinary transfers cannot use fixed deposit accounts';
-    END IF;
-
-
-    SELECT BankID INTO v_FromBankID FROM Branch
-    WHERE BranchID = v_FromBranchID FOR SHARE;
-    SELECT BankID INTO v_ToBankID FROM Branch
-    WHERE BranchID = v_ToBranchID FOR SHARE;
-    IF v_FromBankID <> v_ToBankID THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only transfers within the same bank are supported';
     END IF;
 
     IF v_FromType = 'SAVINGS' THEN

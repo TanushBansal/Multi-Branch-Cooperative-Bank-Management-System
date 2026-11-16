@@ -27,7 +27,7 @@ python demo-app/install_loans.py --database CooperativeBankDemo
 
 Restart the server after changing its Python code, then reload the browser.
 The installer also adds LinkLoanGuarantor for linking an existing guarantor to an
-application. To refresh loans, reporting views, and indexes together:
+application. To refresh banking/loan routines, reporting views, and indexes together:
 
 ```powershell
 python demo-app/setup_demo.py --update --name CooperativeBankDemo
@@ -99,7 +99,8 @@ mysql -h 127.0.0.1 -u bank_demo -p CooperativeBankDemo -e "UPDATE Account SET Ba
 2. Enter account 1001, amount 500, channel BRANCH. A unique request ID is provided.
 3. Run operation, then Refresh. The changed balance is highlighted.
 4. Select BankTransaction to show the successful transaction and its returned ID.
-5. Transfer funds from 1001 to 2001, amount 250, channel ONLINE. Refresh Account;
+5. Transfer funds from 1001 to 2001, amount 250, channel ONLINE. For an inter-bank
+   transfer use 1001 to 4001, amount 100; 4001 belongs to Pragati Cooperative Bank. Refresh Account;
    view TransferDetails and BankTransaction to explain the atomic operation.
 6. Open Loans → Apply for a loan. Use customer 1, branch 1, type PERSONAL,
    amount 10000, purpose Home renovation. Run and refresh LoanApplication to see PENDING.
@@ -144,3 +145,25 @@ The real MySQL/HTTP integration check creates and removes its own disposable dat
 ```powershell
 python -B demo-app/check_integration.py
 ```
+
+## Multi-bank sample data
+
+New demo databases contain Sahyog Cooperative Bank (three branches) and Pragati
+Cooperative Bank (Mumbai Central, accounts 4001 Savings and 4002 Current).
+Seed transactions 27 and 28 are successful inter-bank transfers in opposite
+directions; 29 is pending and 30 failed. Pending/failed examples do not move balances.
+The Transaction history report shows both banks and INTER_BANK scope.
+
+An update of an existing demo refreshes procedures/reports but does not append or
+reload seed records. For the complete new dataset without resetting existing work:
+
+```powershell
+python demo-app/setup_demo.py --name CooperativeBankMultiBankDemo
+python demo-app/server.py --database CooperativeBankMultiBankDemo --port 8081
+```
+
+Open http://127.0.0.1:8081 for this separate demo.
+
+All participating bank accounts are stored in this one database; there is no
+external payment-network connection. After reinstalling procedures, reapply the
+restricted-user grants to the database you use for the presentation.

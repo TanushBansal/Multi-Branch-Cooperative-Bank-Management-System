@@ -12,6 +12,11 @@ def update_demo(name='CooperativeBankDemo'):
     source = Path(__file__).resolve().parent.parent / 'database'
     # USE fails if the target does not exist; this path never creates or resets it.
     server.query('USE `' + name + '`;')
+    transactions = (source / '04_transactions.sql').read_text(encoding='utf-8-sig')
+    transactions = re.sub(r'USE CooperativeBank\s*;', 'USE `' + name + '`;', transactions, flags=re.I)
+    server.query('USE `' + name + '`;\nDROP PROCEDURE IF EXISTS Deposit;\n'
+                 'DROP PROCEDURE IF EXISTS Withdraw;\nDROP PROCEDURE IF EXISTS Transfer;\n'
+                 + transactions)
     install_loans.install(name)
     views = (source / '06_views.sql').read_text(encoding='utf-8-sig')
     views = re.sub(r'USE CooperativeBank\s*;', 'USE `' + name + '`;', views, flags=re.I)

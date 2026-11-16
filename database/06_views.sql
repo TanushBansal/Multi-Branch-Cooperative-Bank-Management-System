@@ -84,7 +84,7 @@ GROUP BY b.BranchID, b.BranchName;
 -- ---------------------------------------------------------------
 -- 4. Transaction history: one row per transaction, with source and
 --    destination accounts and, for transfers, whether the two accounts
---    are at the same branch.
+--    are at the same branch, different branches of one bank, or different banks.
 -- ---------------------------------------------------------------
 CREATE OR REPLACE SQL SECURITY INVOKER VIEW v_transaction_history AS
 SELECT t.TransactionID,
@@ -102,15 +102,24 @@ SELECT t.TransactionID,
            WHEN t.TransactionType = 'TRANSFER' THEN d.ToAccountNo
            WHEN t.TransactionType IN ('DEPOSIT', 'LOAN_DISBURSEMENT') THEN t.AccountNo
        END AS DestinationAccountNo,
+       fb.BankID AS SourceBankID,
+       source_bank.BankName AS SourceBankName,
+       tb.BankID AS DestinationBankID,
+       destination_bank.BankName AS DestinationBankName,
        CASE
            WHEN t.TransactionType <> 'TRANSFER' OR d.TransactionID IS NULL THEN NULL
+           WHEN fb.BankID <> tb.BankID THEN 'INTER_BANK'
            WHEN fa.BranchID = ta.BranchID THEN 'INTRA_BRANCH'
            ELSE 'INTER_BRANCH'
        END AS TransferScope
 FROM BankTransaction t
 LEFT JOIN TransferDetails d ON d.TransactionID = t.TransactionID
 LEFT JOIN Account fa        ON fa.AccountNo = d.FromAccountNo
-LEFT JOIN Account ta        ON ta.AccountNo = d.ToAccountNo;
+LEFT JOIN Account ta        ON ta.AccountNo = d.ToAccountNo
+LEFT JOIN Branch fb         ON fb.BranchID = fa.BranchID
+LEFT JOIN Branch tb         ON tb.BranchID = ta.BranchID
+LEFT JOIN Bank source_bank  ON source_bank.BankID = fb.BankID
+LEFT JOIN Bank destination_bank ON destination_bank.BankID = tb.BankID;
 
 -- ---------------------------------------------------------------
 -- 5. Account statement: every transaction as a debit or credit line on

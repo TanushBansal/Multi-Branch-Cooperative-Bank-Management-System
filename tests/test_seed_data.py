@@ -70,6 +70,18 @@ class SeedDataTest(unittest.TestCase):
             with self.subTest(table=table):
                 self.assertGreater(int(self.execute(f"SELECT COUNT(*) FROM `{table}`")), 0)
 
+    def test_multi_bank_sample_data_and_transfer_scopes(self):
+        self.assertEqual(self.execute('SELECT COUNT(*) FROM Bank'), '2')
+        self.assertEqual(self.execute('SELECT COUNT(*) FROM Branch WHERE BankID=2'), '1')
+        self.assertEqual(self.execute("SELECT TransactionID,SourceBankID,DestinationBankID,TransferScope "
+                                      "FROM v_transaction_history WHERE TransactionID IN (14,16,27,28) "
+                                      "ORDER BY TransactionID"),
+                         '14\t1\t1\tINTER_BRANCH\n16\t1\t1\tINTRA_BRANCH\n'
+                         '27\t1\t2\tINTER_BANK\n28\t2\t1\tINTER_BANK')
+        self.assertEqual(self.execute("SELECT Status FROM v_transaction_history WHERE "
+                                      "TransferScope='INTER_BANK' ORDER BY TransactionID"),
+                         'SUCCESS\nSUCCESS\nPENDING\nFAILED')
+
     def test_balances_reconcile_with_successful_history(self):
         self.assert_no_rows("""
             WITH movements AS (

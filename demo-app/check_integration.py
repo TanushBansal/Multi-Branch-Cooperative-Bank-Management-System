@@ -1,5 +1,6 @@
 """Exercise actual MySQL procedures and HTTP endpoints in a disposable database."""
 import json
+from decimal import Decimal
 from pathlib import Path
 import threading
 import uuid
@@ -63,6 +64,12 @@ try:
     operate('Withdraw', ['1001', '500', 'BRANCH', 'web-withdraw'])
     assert server.rows('SELECT Balance FROM Account WHERE AccountNo=1001')[0]['Balance'] == initial
     operate('Transfer', ['1001', '2001', '250', 'ONLINE', 'web-transfer'])
+    bank_before = server.rows('SELECT Balance FROM Account WHERE AccountNo=4001')[0]['Balance']
+    operate('Transfer', ['1001', '4001', '100', 'ONLINE', 'web-cross-bank'])
+    assert Decimal(server.rows('SELECT Balance FROM Account WHERE AccountNo=4001')[0]['Balance']) == Decimal(bank_before) + 100
+    scope = server.rows("SELECT TransferScope,SourceBankID,DestinationBankID FROM v_transaction_history "
+                        "WHERE RequestID='web-cross-bank'")[0]
+    assert scope == {'TransferScope': 'INTER_BANK', 'SourceBankID': '1', 'DestinationBankID': '2'}
     operate('OpenSavingsAccount', ['7001','1','1','2026-11-15','4','100','500','web-saving'])
     operate('OpenCurrentAccount', ['7002','1','1','2026-11-15','100','500','web-current'])
     operate('OpenFixedDeposit', ['7003','1','1','2026-11-15','2027-11-15','500','6','web-fd'])

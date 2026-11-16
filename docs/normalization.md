@@ -10,7 +10,7 @@ for integrity enforcement; it should not be described as entirely in BCNF.
 
 The analysis uses the following business rules:
 
-- A bank operates multiple branches. IFSC uniquely identifies a branch.
+- Multiple banks may be registered, and each bank operates multiple branches. IFSC uniquely identifies a branch.
 - Each employee belongs to one branch. Manager and Clerk are disjoint, partial
   specializations of Employee.
 - PAN uniquely identifies a customer within Customer and a guarantor within

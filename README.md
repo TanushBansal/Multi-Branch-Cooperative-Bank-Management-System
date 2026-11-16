@@ -10,13 +10,13 @@ operations and refresh the tables to see their effects.
 | Area | Supported functionality |
 | --- | --- |
 | Accounts | Savings, Current, and Fixed Deposit account opening; joint ownership; nominees; account states and subtype-specific terms |
-| Banking | Deposits, withdrawals, and intra-/inter-branch transfers within the same bank |
+| Banking | Deposits, withdrawals, and same-branch, inter-branch, and inter-bank transfers |
 | Loans | Applications, guarantor linkage, approval/rejection, disbursement, monthly installments, repayment allocation, and closure |
 | Reporting | Account/customer statements, transaction history, branch summaries, staffing, loan portfolios, and pending applications |
 | Integrity | Primary/foreign keys, domain checks, composite references, chronology checks, and transactional balance updates |
 | Concurrency | Row locking, concurrent-operation tests, and a separate lost-update experiment |
 
-The schema contains **21 base tables**. Sample data covers three branches, all account
+The schema contains **21 base tables**. Sample data covers two banks and four branches, all account
 types, joint accounts, nominees, and loans at different lifecycle stages.
 
 ## Prerequisites
@@ -87,7 +87,7 @@ Use these seeded IDs in a newly created demo database:
 | --- | --- | --- |
 | 1 | Deposit `500` into account `1001`, channel `BRANCH` | Account, BankTransaction |
 | 2 | Transfer `250` from `1001` to `2001`, channel `ONLINE` | Account, BankTransaction, TransferDetails |
-| 3 | Try withdrawing more than the available funds | Verify the error and unchanged balances/ledger |
+| 3 | Transfer `100` from `1001` to `4001` (Pragati Cooperative Bank), then try withdrawing more than the available funds | Verify the error and unchanged balances/ledger |
 | 4 | Apply for a PERSONAL loan: customer `1`, branch `1`, amount `10000`, purpose `Home renovation` | LoanApplication; note the returned application ID |
 | 5 | Link guarantor `1` to that application, then approve using manager `1` | ApplicationGuarantor, LoanApplication |
 | 6 | Disburse to account `1001`, annual interest `12`, tenure `3` months | Account, BankTransaction, Loan; note the returned loan ID |
@@ -128,13 +128,14 @@ python demo-app/install_loans.py --database CooperativeBankDemo
 This replaces installed loan routines without resetting table data. Restart the
 server after backend code changes, then reload the browser.
 
-To refresh loan routines, reporting views, and indexes together in an existing demo:
+To refresh banking/loan routines, reporting views, and indexes together in an existing demo:
 
 ```powershell
 python demo-app/setup_demo.py --update --name CooperativeBankDemo
 ```
 
 This retains table records and skips indexes already installed with matching columns.
+It also replaces the banking procedures, including the multi-bank Transfer procedure.
 It does not migrate table definitions or reload sample data. For schema changes,
 create a fresh demo database under a new name or prepare an explicit migration.
 
@@ -230,6 +231,12 @@ tests/                        Core integration tests, smoke tests, and reporting
 Ordinary deposits, withdrawals, and transfers support Savings and Current accounts.
 FD maturity and closure require a separate workflow. Loan approval requires a linked
 guarantor and a manager from the receiving branch; repayment requires an unpaid schedule.
+
+Inter-bank transfers cover accounts of banks registered in this shared database.
+The seed includes Sahyog (accounts `1001`?`3003`) and Pragati (accounts `4001`, `4002`).
+The transaction history distinguishes `INTRA_BRANCH`, `INTER_BRANCH`, and `INTER_BANK`
+and includes source/destination bank identifiers and names. External payment networks
+and distributed settlement are outside scope. Account numbers remain globally unique.
 
 The app is a local academic demo that runs real financial procedures against the
 selected database. Use the separate presentation dataset for experiments. Sample

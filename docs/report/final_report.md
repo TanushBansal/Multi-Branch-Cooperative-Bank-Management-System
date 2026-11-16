@@ -17,7 +17,7 @@ A cooperative bank needs to operate across branches while keeping customer infor
 |---|---|
 | Customer and account management | Customer profiles, joint ownership, nominees, and opening savings, current and fixed-deposit accounts |
 | Branch and employee management | Branch identifiers, staff assignments, and manager and clerk roles |
-| Transaction processing | Deposits, withdrawals, and intra- and inter-branch transfers within the same bank |
+| Transaction processing | Deposits, withdrawals, and same-branch, inter-branch and inter-bank transfers within the shared database |
 | Loan management | Application, guarantor linkage, approval or rejection, funding, EMI schedules, repayment allocation and closure |
 | Reporting | Account and customer statements, branch summaries, pending applications and loan portfolios |
 
@@ -91,4 +91,4 @@ The [demo application](../../demo-app/README.md) uses a separate seeded schema. 
 
 ## 9. Scope boundaries
 
-The project models one cooperative bank and its internal transfers. Fixed-deposit maturity and closure, external-bank settlement and automatic loan default classification are outside the implemented workflows. Total account specialization is established by the account-opening procedures and checked by the smoke test. Privileged administrative writes can bypass some procedural invariants, so the demo account uses restricted grants for normal operation.
+The shared database now models multiple banks, with seeded Sahyog and Pragati branches. Transfers between their accounts commit atomically and appear as INTER_BANK in transaction history. This extends the original single-bank proposal; historical benchmark measurements above describe the earlier benchmark fixture. Fixed-deposit maturity and closure, external payment-network settlement and automatic loan default classification are outside the implemented workflows. Total account specialization is established by the account-opening procedures and checked by the smoke test. Privileged administrative writes can bypass some procedural invariants, so the demo account uses restricted grants for normal operation.

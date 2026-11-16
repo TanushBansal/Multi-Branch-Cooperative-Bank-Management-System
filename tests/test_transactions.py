@@ -243,11 +243,28 @@ class TransactionsTest(unittest.TestCase):
         self.assert_rejected("CALL Withdraw(1001,1,NULL,'missing',@id)", "subtype record is missing")
         self.assert_rejected("CALL Transfer(1001,2001,1,NULL,'missing',@id)", "subtype record is missing")
 
-    def test_overflow_and_other_bank(self):
+    def test_overflow(self):
         self.execute("UPDATE Account SET Balance=9999999999999.99 WHERE AccountNo=2001")
         self.assert_rejected("CALL Deposit(2001,0.01,NULL,'overflow',@id)", "balance limit")
         self.assert_rejected("CALL Transfer(1001,2001,0.01,NULL,'overflow',@id)", "balance limit")
-        self.assert_rejected("CALL Transfer(1001,3001,1,NULL,'other',@id)", "same bank")
+        self.execute("UPDATE Account SET Balance=9999999999999.99 WHERE AccountNo=3001")
+        self.assert_rejected("CALL Transfer(1001,3001,0.01,NULL,'overflow-bank',@id)", "balance limit")
+
+    def test_cross_bank_transfers_both_directions_and_reporting(self):
+        self.execute("CALL Transfer(1001,3001,200,'ONLINE','bank-out',@id);")
+        self.execute("CALL Transfer(3001,1002,50,'ONLINE','bank-in',@id);")
+        self.assertEqual(self.balance(1001), Decimal('800'))
+        self.assertEqual(self.balance(3001), Decimal('1150'))
+        self.assertEqual(self.balance(1002), Decimal('1050'))
+        self.assertEqual(self.execute("SELECT SourceBankID,DestinationBankID,TransferScope "
+                                      "FROM v_transaction_history ORDER BY TransactionID"),
+                         '1\t2\tINTER_BANK\n2\t1\tINTER_BANK')
+        self.assert_rejected("CALL Transfer(1001,3001,200,'ONLINE','bank-out',@id)", 'Duplicate entry')
+
+    def test_cross_bank_minimum_balance_and_inactive_destination(self):
+        self.assert_rejected("CALL Transfer(1001,3001,901,NULL,'bank-min',@id)", 'minimum balance')
+        self.execute("UPDATE Account SET Status='FROZEN' WHERE AccountNo=3001")
+        self.assert_rejected("CALL Transfer(1001,3001,100,NULL,'bank-frozen',@id)", 'must be active')
 
     def test_duplicate_request_across_operations(self):
         self.execute("CALL Deposit(1001,10,NULL,'duplicate',@id)")
@@ -261,14 +278,14 @@ class TransactionsTest(unittest.TestCase):
             DELIMITER $$
             CREATE TRIGGER test_fail_credit BEFORE UPDATE ON Account FOR EACH ROW
             BEGIN
-                IF NEW.AccountNo=2001 THEN
+                IF NEW.AccountNo=3001 THEN
                     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Injected credit failure';
                 END IF;
             END$$
             DELIMITER ;
         """)
         try:
-            self.assert_rejected("CALL Transfer(1001,2001,100,NULL,'failure',@id)",
+            self.assert_rejected("CALL Transfer(1001,3001,100,NULL,'failure',@id)",
                                  "Injected credit failure")
         finally:
             self.execute("DROP TRIGGER test_fail_credit")
@@ -317,6 +334,17 @@ class TransactionsTest(unittest.TestCase):
         self.assertEqual(sum(r.returncode == 0 for r in results), 1)
         self.assertEqual(self.balance(1001), Decimal("1010"))
         self.assertEqual(self.execute("SELECT COUNT(*) FROM BankTransaction"), "1")
+
+    def test_concurrent_opposite_cross_bank_transfers_preserve_balances(self):
+        def transfer(i):
+            source, target = (1001, 3001) if i % 2 else (3001, 1001)
+            self.execute(f"CALL Transfer({source},{target},1,NULL,'bank-opposite-{i}',@id)")
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            list(pool.map(transfer, range(24)))
+        self.assertEqual(self.balance(1001), Decimal('1000'))
+        self.assertEqual(self.balance(3001), Decimal('1000'))
+        self.assertEqual(self.execute("SELECT COUNT(*) FROM v_transaction_history "
+                                      "WHERE TransferScope='INTER_BANK' AND Status='SUCCESS'"), '24')
 
 
 if __name__ == "__main__":

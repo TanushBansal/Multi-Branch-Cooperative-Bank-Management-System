@@ -32,10 +32,11 @@ The project covers five functional modules:
 4. Loan management.
 5. Reporting and administration.
 
-Branches share one database. Inter-branch transfers are transfers between accounts
-at different branches of the same bank; external-bank settlement is outside scope.
-Although Bank is a separate entity, ordinary transfer procedures must reject a
-transfer between different banks.
+Banks and branches share one database. Transfers may connect accounts at the same
+branch, different branches of one bank, or different banks registered in the system.
+All use one atomic database transaction. Integration with external payment networks
+and settlement across independently operated databases is outside scope. Account
+numbers are globally unique across the modeled banks.
 
 The presentation interface is a local demonstration application with Banking and
 Loans sections and refreshable database records. A complete customer-facing banking
@@ -89,7 +90,7 @@ demo's ability to enter a manager ID is not an authentication mechanism.
 | --- | --- |
 | TP-01 | Deposit a positive amount into an eligible Savings or Current account and increase its balance by that amount. |
 | TP-02 | Withdraw a positive amount from an eligible account while preserving its minimum balance. |
-| TP-03 | Transfer a positive amount between distinct eligible accounts, within or across branches of the same bank. Debit and credit must commit together. |
+| TP-03 | Transfer a positive amount between distinct eligible accounts, within a branch, across branches, or across registered banks. Debit and credit must commit together. |
 | TP-04 | Store transaction ID, timestamp, type, amount, channel, status, and unique request ID. Distinguish PENDING, SUCCESS, and FAILED records. |
 | TP-05 | Record exactly one TransferDetails row for a transfer, with its source and destination. Other transaction types must not have transfer details. |
 | TP-06 | For a non-transfer transaction, identify its affected account in BankTransaction. A transfer uses its detail row instead of that account field. |
@@ -122,7 +123,7 @@ demo's ability to enter a manager ID is not an authentication mechanism.
 | --- | --- |
 | RA-01 | Provide account overviews with branch, account type, terms, holder information, balance, and status. |
 | RA-02 | Provide branch-wise account counts, balances, and staffing summaries. |
-| RA-03 | Provide transaction histories identifying transfer endpoints and intra-/inter-branch scope. |
+| RA-03 | Provide transaction histories identifying transfer endpoints, source/destination banks, and INTRA_BRANCH, INTER_BRANCH, or INTER_BANK scope. |
 | RA-04 | Provide account statements with debit, credit, and running balance, plus customer statements across held accounts. Only successful events affect balances. |
 | RA-05 | Provide loan portfolios showing schedule totals, repayments, scheduled outstanding, overdue amounts, and next unpaid due dates. |
 | RA-06 | Provide branch-wise loan summaries and pending-application queues. |

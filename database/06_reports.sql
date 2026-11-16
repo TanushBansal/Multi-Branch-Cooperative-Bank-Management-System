@@ -1,9 +1,6 @@
--- Direct reporting queries for account, branch, transaction, and loan summaries.
-USE CooperativeBank;
+use CooperativeBank;
 
--- report: transfer_integrity_violations
--- columns: TransactionID, Status, RequestID
--- keys: TransactionID
+-- transfers missing details
 select t.TransactionID, t.Status, t.RequestID
 from BankTransaction t
 where t.TransactionType = 'TRANSFER'
@@ -11,9 +8,7 @@ where t.TransactionType = 'TRANSFER'
       select 1 from TransferDetails d where d.TransactionID = t.TransactionID
   );
 
--- report: account_overview
--- columns: AccountNo, AccountType, Status, Balance, OpenedOn, BranchID, BranchName, MinimumBalance, InterestRate, HolderCount, Holders
--- keys: AccountNo
+-- account overview
 select a.AccountNo,
        a.AccountType,
        a.Status,
@@ -36,9 +31,7 @@ group by a.AccountNo, a.AccountType, a.Status, a.Balance, a.OpenedOn,
          b.BranchID, b.BranchName,
          s.MinimumBalance, cu.MinimumBalance, s.InterestRate, f.InterestRate;
 
--- report: branch_account_summary
--- columns: BranchID, BranchName, IFSC, TotalAccounts, SavingsAccounts, CurrentAccounts, FixedDeposits, ActiveAccounts, FrozenAccounts, ClosedAccounts, TotalBalance
--- keys: BranchID
+-- branch account summary
 select b.BranchID,
        b.BranchName,
        b.IFSC,
@@ -54,9 +47,7 @@ from Branch b
 left join Account a on a.BranchID = b.BranchID
 group by b.BranchID, b.BranchName, b.IFSC;
 
--- report: branch_staff
--- columns: BranchID, BranchName, TotalEmployees, Managers, Clerks, ManagerNames
--- keys: BranchID
+-- branch staff
 select b.BranchID,
        b.BranchName,
        count(e.EmployeeID) as TotalEmployees,
@@ -68,9 +59,7 @@ from Branch b
 left join Employee e on e.BranchID = b.BranchID
 group by b.BranchID, b.BranchName;
 
--- report: transaction_history
--- columns: TransactionID, TransactionDate, TransactionType, Status, Channel, Amount, RequestID, SourceAccountNo, DestinationAccountNo, SourceBankID, SourceBankName, DestinationBankID, DestinationBankName, TransferScope
--- keys: TransactionID
+-- transaction history
 select t.TransactionID,
        t.TransactionDate,
        t.TransactionType,
@@ -105,9 +94,7 @@ left join Branch tb on tb.BranchID = ta.BranchID
 left join Bank source_bank on source_bank.BankID = fb.BankID
 left join Bank destination_bank on destination_bank.BankID = tb.BankID;
 
--- report: account_statement
--- columns: AccountNo, TransactionID, TransactionDate, TransactionType, Channel, Status, CounterpartyAccountNo, Debit, Credit, RunningBalance
--- keys: AccountNo, TransactionID
+-- account statement
 select s.AccountNo,
        s.TransactionID,
        s.TransactionDate,
@@ -143,10 +130,8 @@ from (
     join TransferDetails d on d.TransactionID = t.TransactionID
 ) s;
 
--- report: customer_statement
--- columns: CustomerID, CustomerName, AccountNo, TransactionID, TransactionDate, TransactionType, Channel, Status, CounterpartyAccountNo, Debit, Credit, RunningBalance
--- keys: CustomerID, AccountNo, TransactionID
-WITH account_statement AS (
+-- customer statement
+with account_statement as (
 select s.AccountNo,
        s.TransactionID,
        s.TransactionDate,
@@ -198,9 +183,7 @@ from Customer c
 join AccountHolder ah on ah.CustomerID = c.CustomerID
 join account_statement st on st.AccountNo = ah.AccountNo;
 
--- report: loan_portfolio
--- columns: LoanID, ApplicationID, CustomerID, CustomerName, BranchID, BranchName, LoanType, SanctionDate, SanctionAmount, InterestRate, TenureMonths, Status, InstallmentsGenerated, ScheduledTotal, AmountRepaid, ScheduledOutstanding, OverdueAmount, NextUnpaidDueDate
--- keys: LoanID
+-- loan portfolio
 with inst as (
     select i.LoanID,
            i.InstallmentID,
@@ -252,10 +235,8 @@ join Branch b on b.BranchID = la.BranchID
 left join sched s on s.LoanID = l.LoanID
 left join repaid r on r.LoanID = l.LoanID;
 
--- report: branch_loan_portfolio
--- columns: BranchID, BranchName, TotalLoans, Sanctioned, ActiveLoans, ClosedLoans, DefaultedLoans, TotalSanctionedAmount, TotalScheduledOutstanding, TotalOverdue, PendingApplications
--- keys: BranchID
-WITH loan_portfolio AS (
+-- branch loan portfolio
+with loan_portfolio as (
 with inst as (
     select i.LoanID,
            i.InstallmentID,
@@ -323,9 +304,7 @@ from Branch b
 left join loan_portfolio p on p.BranchID = b.BranchID
 group by b.BranchID, b.BranchName;
 
--- report: pending_applications
--- columns: ApplicationID, ApplicationDate, BranchID, BranchName, CustomerID, CustomerName, LoanType, RequestedAmount, Purpose, GuarantorsLinked
--- keys: ApplicationID
+-- pending applications
 select la.ApplicationID,
        la.ApplicationDate,
        la.BranchID,

@@ -3,7 +3,7 @@
 -- Run once after building the database (files 01 to 04). Safe to rerun.
 --
 -- Creates two demonstration procedures that differ in exactly one clause,
--- and helpers that open and restore three dedicated demonstration accounts.
+-- and helpers that open and restore two dedicated demonstration accounts.
 -- The production procedures in 04_transactions.sql are not modified.
 
 USE CooperativeBank;
@@ -133,9 +133,9 @@ END$$
 -- balance returns to 10000.00, so the account again matches its ledger.
 CREATE PROCEDURE ConcurrencyDemoReset (IN p_AccountNo BIGINT)
 BEGIN
-    IF p_AccountNo NOT IN (9100000001, 9100000002, 9100000003) THEN
+    IF p_AccountNo NOT IN (9100000001, 9100000002) THEN
         SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'Use one of the demonstration accounts 9100000001 to 9100000003';
+            SET MESSAGE_TEXT = 'Use one of the demonstration accounts 9100000001 to 9100000002';
     END IF;
 
     IF EXISTS (SELECT 1 FROM Account WHERE AccountNo = p_AccountNo) THEN
@@ -156,7 +156,6 @@ DELIMITER ;
 
 CALL ConcurrencyDemoReset(9100000001);
 CALL ConcurrencyDemoReset(9100000002);
-CALL ConcurrencyDemoReset(9100000003);
 
 SELECT AccountNo, Balance FROM Account
-WHERE AccountNo BETWEEN 9100000001 AND 9100000003 ORDER BY AccountNo;
+WHERE AccountNo BETWEEN 9100000001 AND 9100000002 ORDER BY AccountNo;

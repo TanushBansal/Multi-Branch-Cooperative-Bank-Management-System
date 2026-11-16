@@ -53,7 +53,6 @@ The [two-session concurrency experiment](../../experiments/concurrency/README.md
 |---|---|
 | Unlocked reads | Both sessions read 10,000.00. Both withdrawals posted, but A's later write left 9,000.00 stored against a 7,000.00 ledger balance. The mismatch was 2,000.00. |
 | Row locking | B waited 12.77 seconds for A to commit, then read 9,000.00 and wrote 7,000.00. Both withdrawals were applied. |
-| SERIALIZABLE | A received deadlock error 1213 and rolled back. B committed the 2,000.00 withdrawal and wrote a balance of 8,000.00. |
 
 The demo fixtures were reset after the experiment. The post-reset smoke test returned zero rows.
 

@@ -188,7 +188,7 @@ mysql --login-path=local -e "source tests/report_views_checks.sql"
 Additional checks:
 
 - [Concurrency experiment](experiments/concurrency/README.md) provides two-session
-  demonstrations of lost updates, row locking, and SERIALIZABLE isolation.
+  demonstrations of lost updates and their prevention using row locking.
 - `node --check demo-app/app.js` checks JavaScript syntax if Node is installed.
 
 ## Repository guide

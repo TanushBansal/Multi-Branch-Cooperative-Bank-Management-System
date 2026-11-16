@@ -18,11 +18,11 @@ SELECT a.AccountNo,
 FROM Account a
 JOIN BankTransaction t
   ON t.AccountNo = a.AccountNo AND t.Status = 'SUCCESS'
-WHERE a.AccountNo BETWEEN 9100000001 AND 9100000003
+WHERE a.AccountNo BETWEEN 9100000001 AND 9100000002
 GROUP BY a.AccountNo, a.Balance
 ORDER BY a.AccountNo;
 
 SELECT AccountNo, TransactionType, Amount, Status, RequestID
 FROM BankTransaction
-WHERE AccountNo BETWEEN 9100000001 AND 9100000003
+WHERE AccountNo BETWEEN 9100000001 AND 9100000002
 ORDER BY AccountNo, TransactionID;

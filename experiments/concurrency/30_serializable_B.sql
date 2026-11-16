@@ -1,6 +1,0 @@
-
-
-USE CooperativeBank;
-
-SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
-CALL WithdrawUnsafe(9100000003, 2000.00, 'cdemo-sr-b', 0);

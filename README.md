@@ -56,7 +56,7 @@ python demo-app/setup_demo.py
 ```
 
 This creates **CooperativeBankDemo**, loads sample data, and installs the schema,
-constraints, banking procedures, loan procedures, reporting views, and indexes. It does not
+constraints, banking procedures, loan procedures, direct reporting queries, and indexes. It does not
 change an existing `CooperativeBank` database or overwrite an existing demo database.
 
 If the demo database already exists, skip setup. For a fresh dataset under a new name:
@@ -98,24 +98,20 @@ The interface generates banking RequestIDs. Reusing one is rejected without movi
 funds again. Use a new application for another loan demonstration; an application
 cannot be disbursed twice.
 
-To inspect reports, connect to the demo database:
+The explorer groups its dropdown into **Tables** and **Reports and audits**.
+Reports are computed directly from base tables using SELECT queries and CTEs.
+Refresh recalculates the report from current data.
+
+To run a report directly from the terminal:
 
 ```powershell
-mysql --login-path=local CooperativeBankDemo
+python demo-app/reports.py branch_account_summary | mysql --login-path=local CooperativeBankDemo
+python demo-app/reports.py account_statement | mysql --login-path=local CooperativeBankDemo
+python demo-app/reports.py loan_portfolio | mysql --login-path=local CooperativeBankDemo
 ```
 
-```sql
-SELECT * FROM v_branch_account_summary;
-SELECT * FROM v_account_statement
-WHERE AccountNo = 1001
-ORDER BY TransactionDate, TransactionID;
-SELECT * FROM v_loan_portfolio;
-SELECT * FROM v_pending_applications;
-```
-
-The explorer groups its dropdown into Tables and Reports and audit views. Choose a
-report and press Refresh to inspect statements, summaries, staffing, and portfolios.
-The SQL queries above provide the same reports directly.
+The complete query catalog is in `database/06_reports.sql`. Each report is an
+independent SELECT; its CTEs exist only for that statement.
 
 ## Updating loan procedures
 
@@ -128,7 +124,7 @@ python demo-app/install_loans.py --database CooperativeBankDemo
 This replaces installed loan routines without resetting table data. Restart the
 server after backend code changes, then reload the browser.
 
-To refresh banking/loan routines, reporting views, and indexes together in an existing demo:
+To refresh banking/loan routines, direct reporting queries, and indexes together in an existing demo:
 
 ```powershell
 python demo-app/setup_demo.py --update --name CooperativeBankDemo
@@ -182,7 +178,7 @@ After building `CooperativeBank`, run the two SQL checks. Both should return zer
 
 ```powershell
 mysql --login-path=local -e "source tests/smoke_tests.sql"
-mysql --login-path=local -e "source tests/report_views_checks.sql"
+mysql --login-path=local -e "source tests/report_checks.sql"
 ```
 
 Additional checks:
@@ -202,7 +198,7 @@ database/
   03_seed_data.sql              Representative sample records
   04_transactions.sql          Deposit, withdrawal, and transfer
   05_loans.sql                 Loan lifecycle procedures
-  06_views.sql                 Reporting and integrity views
+  06_reports.sql                 Direct reporting and integrity queries
   07_indexes.sql               Transaction date and account/date indexes
 demo-app/                     Frontend, Python server, setup, and tests
 docs/                         Proposal, problem statement, ER, and design documents

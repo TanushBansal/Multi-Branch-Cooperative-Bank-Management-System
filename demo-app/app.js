@@ -227,8 +227,8 @@ async function boot() {
     tables.label = 'Tables';
     tables.append(...config.tables.map((t) => option(t, t)));
     const reports = document.createElement('optgroup');
-    reports.label = 'Reports and audit views';
-    reports.append(...config.views.map((v) => option(v, label(v.replace(/^v_/, '')))));
+    reports.label = 'Reports and audits';
+    reports.append(...config.reports.map((name) => option(name, label(name))));
     $('table').replaceChildren(tables, reports);
     switchSection(section);
   } catch (error) {

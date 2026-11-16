@@ -20,21 +20,67 @@ SET @crud_account = 9800000001;
 INSERT INTO Account (AccountNo, BranchID, AccountType, OpenedOn)
 VALUES (@crud_account, @crud_branch, 'SAVINGS', CURDATE());
 INSERT INTO SavingsAccount (AccountNo, InterestRate) VALUES (@crud_account, 3);
-INSERT INTO AccountHolder (CustomerID, AccountNo) VALUES (@crud_customer, @crud_account);
+INSERT INTO AccountHolder (CustomerID, AccountNo) VALUES (@crud_customer, @crud_account);WITH account_overview AS (
+select a.AccountNo,
+       a.AccountType,
+       a.Status,
+       a.Balance,
+       a.OpenedOn,
+       b.BranchID,
+       b.BranchName,
+       coalesce(s.MinimumBalance, cu.MinimumBalance) as MinimumBalance,
+       coalesce(s.InterestRate, f.InterestRate) as InterestRate,
+       count(ah.CustomerID) as HolderCount,
+       group_concat(c.CustomerName order by c.CustomerID separator ', ') as Holders
+from Account a
+join Branch b on b.BranchID = a.BranchID
+left join SavingsAccount s on s.AccountNo = a.AccountNo
+left join CurrentAccount cu on cu.AccountNo = a.AccountNo
+left join FixedDeposit f on f.AccountNo = a.AccountNo
+left join AccountHolder ah on ah.AccountNo = a.AccountNo
+left join Customer c on c.CustomerID = ah.CustomerID
+group by a.AccountNo, a.AccountType, a.Status, a.Balance, a.OpenedOn,
+         b.BranchID, b.BranchName,
+         s.MinimumBalance, cu.MinimumBalance, s.InterestRate, f.InterestRate
+)
+
 
 -- Read customer, branch and account data together.
 SELECT c.CustomerName, v.BranchName, v.AccountNo, v.AccountType, v.Status
-FROM v_account_overview v
+FROM account_overview v
 JOIN Customer c ON c.CustomerID = @crud_customer
 WHERE v.AccountNo = @crud_account;
 
 -- Update the customer profile, branch name and account status.
 UPDATE Customer SET Phone = '9999999999' WHERE CustomerID = @crud_customer;
 UPDATE Branch SET BranchName = 'CRUD demo branch updated' WHERE BranchID = @crud_branch;
-UPDATE Account SET Status = 'FROZEN' WHERE AccountNo = @crud_account;
+UPDATE Account SET Status = 'FROZEN' WHERE AccountNo = @crud_account;WITH account_overview AS (
+select a.AccountNo,
+       a.AccountType,
+       a.Status,
+       a.Balance,
+       a.OpenedOn,
+       b.BranchID,
+       b.BranchName,
+       coalesce(s.MinimumBalance, cu.MinimumBalance) as MinimumBalance,
+       coalesce(s.InterestRate, f.InterestRate) as InterestRate,
+       count(ah.CustomerID) as HolderCount,
+       group_concat(c.CustomerName order by c.CustomerID separator ', ') as Holders
+from Account a
+join Branch b on b.BranchID = a.BranchID
+left join SavingsAccount s on s.AccountNo = a.AccountNo
+left join CurrentAccount cu on cu.AccountNo = a.AccountNo
+left join FixedDeposit f on f.AccountNo = a.AccountNo
+left join AccountHolder ah on ah.AccountNo = a.AccountNo
+left join Customer c on c.CustomerID = ah.CustomerID
+group by a.AccountNo, a.AccountType, a.Status, a.Balance, a.OpenedOn,
+         b.BranchID, b.BranchName,
+         s.MinimumBalance, cu.MinimumBalance, s.InterestRate, f.InterestRate
+)
+
 
 SELECT c.CustomerName, c.Phone, v.BranchName, v.AccountNo, v.Status
-FROM v_account_overview v
+FROM account_overview v
 JOIN Customer c ON c.CustomerID = @crud_customer
 WHERE v.AccountNo = @crud_account;
 

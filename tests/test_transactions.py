@@ -9,6 +9,7 @@ credentials come from MYSQL_PWD or the client's existing login configuration.
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
 import os
+import sys
 from pathlib import Path
 import subprocess
 import unittest
@@ -16,11 +17,15 @@ import uuid
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'demo-app'))
+from reports import expand_sql
+
 
 
 class TransactionsTest(unittest.TestCase):
     @classmethod
     def run_sql(cls, sql, *, database=True, force=False):
+        sql = expand_sql(sql)
         args = [os.environ.get("MYSQL_TEST_CLIENT", "mysql"),
                 "--host=" + os.environ.get("MYSQL_TEST_HOST", "127.0.0.1"),
                 "--port=" + os.environ.get("MYSQL_TEST_PORT", "3306"),
@@ -44,7 +49,7 @@ class TransactionsTest(unittest.TestCase):
         cls.database = "cb_transactions_test_" + uuid.uuid4().hex
         cls.execute("CREATE DATABASE " + cls.database, database=False)
         cls.addClassCleanup(cls.drop_database)
-        for filename in ("01_schema.sql", "02_constraints_triggers.sql", "04_transactions.sql", "06_views.sql"):
+        for filename in ("01_schema.sql", "02_constraints_triggers.sql", "04_transactions.sql"):
             sql = (ROOT / "database" / filename).read_text(encoding="utf-8")
             sql = sql.replace("CREATE DATABASE IF NOT EXISTS CooperativeBank;", "")
             sql = sql.replace("USE CooperativeBank;", "USE " + cls.database + ";")
@@ -196,18 +201,18 @@ class TransactionsTest(unittest.TestCase):
         for changes in ('FromAccountNo=1002', 'ToAccountNo=1002'):
             self.assert_rejected(f"UPDATE TransferDetails SET {changes} WHERE TransactionID={transaction}",
                                  'cannot be reassigned')
-        self.assertEqual(self.execute("SELECT COUNT(*) FROM v_transfer_integrity_violations"), '0')
+        self.assertEqual(self.execute("SELECT COUNT(*) FROM transfer_integrity_violations"), '0')
 
     def test_transfer_audit_detects_administrative_import_omissions(self):
         for status in ('PENDING','SUCCESS','FAILED'):
             transaction = self.execute("INSERT INTO BankTransaction "
                 "(AccountNo,TransactionType,Amount,Status,RequestID) "
                 f"VALUES (NULL,'TRANSFER',1,'{status}','audit-{status}'); SELECT LAST_INSERT_ID();")
-            self.assertEqual(self.execute("SELECT Status FROM v_transfer_integrity_violations "
+            self.assertEqual(self.execute("SELECT Status FROM transfer_integrity_violations "
                                           f"WHERE TransactionID={transaction}"), status)
             self.execute("INSERT INTO TransferDetails (TransactionID,FromAccountNo,ToAccountNo) "
                          f"VALUES ({transaction},1001,2001)")
-            self.assertEqual(self.execute("SELECT COUNT(*) FROM v_transfer_integrity_violations "
+            self.assertEqual(self.execute("SELECT COUNT(*) FROM transfer_integrity_violations "
                                           f"WHERE TransactionID={transaction}"), '0')
 
     def test_missing_accounts(self):
@@ -257,7 +262,7 @@ class TransactionsTest(unittest.TestCase):
         self.assertEqual(self.balance(3001), Decimal('1150'))
         self.assertEqual(self.balance(1002), Decimal('1050'))
         self.assertEqual(self.execute("SELECT SourceBankID,DestinationBankID,TransferScope "
-                                      "FROM v_transaction_history ORDER BY TransactionID"),
+                                      "FROM transaction_history ORDER BY TransactionID"),
                          '1\t2\tINTER_BANK\n2\t1\tINTER_BANK')
         self.assert_rejected("CALL Transfer(1001,3001,200,'ONLINE','bank-out',@id)", 'Duplicate entry')
 
@@ -343,7 +348,7 @@ class TransactionsTest(unittest.TestCase):
             list(pool.map(transfer, range(24)))
         self.assertEqual(self.balance(1001), Decimal('1000'))
         self.assertEqual(self.balance(3001), Decimal('1000'))
-        self.assertEqual(self.execute("SELECT COUNT(*) FROM v_transaction_history "
+        self.assertEqual(self.execute("SELECT COUNT(*) FROM transaction_history "
                                       "WHERE TransferScope='INTER_BANK' AND Status='SUCCESS'"), '24')
 
 

@@ -8,6 +8,7 @@ test_transactions.py. CooperativeBank is never modified by these tests.
 from decimal import Decimal, ROUND_HALF_UP
 from concurrent.futures import ThreadPoolExecutor
 import os
+import sys
 from pathlib import Path
 import subprocess
 import unittest
@@ -15,11 +16,15 @@ import uuid
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'demo-app'))
+from reports import expand_sql
+
 
 
 class SeedDataTest(unittest.TestCase):
     @classmethod
     def run_sql(cls, sql, database=True):
+        sql = expand_sql(sql)
         args = [os.environ.get("MYSQL_TEST_CLIENT", "mysql"),
                 "--host=" + os.environ.get("MYSQL_TEST_HOST", "127.0.0.1"),
                 "--port=" + os.environ.get("MYSQL_TEST_PORT", "3306"),
@@ -49,7 +54,7 @@ class SeedDataTest(unittest.TestCase):
         cls.addClassCleanup(cls.drop_database)
         # Load the seed fixture. test_loans.py installs and tests the loan procedures separately.
         for path in sorted((ROOT / "database").glob("0[1-7]_*.sql")):
-            if path.name != "05_loans.sql":
+            if path.name not in ("05_loans.sql", "06_reports.sql"):
                 cls.execute(cls.load_file(path.name))
 
     @classmethod
@@ -74,11 +79,11 @@ class SeedDataTest(unittest.TestCase):
         self.assertEqual(self.execute('SELECT COUNT(*) FROM Bank'), '2')
         self.assertEqual(self.execute('SELECT COUNT(*) FROM Branch WHERE BankID=2'), '1')
         self.assertEqual(self.execute("SELECT TransactionID,SourceBankID,DestinationBankID,TransferScope "
-                                      "FROM v_transaction_history WHERE TransactionID IN (14,16,27,28) "
+                                      "FROM transaction_history WHERE TransactionID IN (14,16,27,28) "
                                       "ORDER BY TransactionID"),
                          '14\t1\t1\tINTER_BRANCH\n16\t1\t1\tINTRA_BRANCH\n'
                          '27\t1\t2\tINTER_BANK\n28\t2\t1\tINTER_BANK')
-        self.assertEqual(self.execute("SELECT Status FROM v_transaction_history WHERE "
+        self.assertEqual(self.execute("SELECT Status FROM transaction_history WHERE "
                                       "TransferScope='INTER_BANK' ORDER BY TransactionID"),
                          'SUCCESS\nSUCCESS\nPENDING\nFAILED')
 
@@ -177,7 +182,7 @@ class SeedDataTest(unittest.TestCase):
         self.assertEqual(self.execute(f"SELECT EmployeeRole FROM Clerk WHERE EmployeeID={employee}"), 'CLERK')
 
     def test_transfer_details_and_reviewers(self):
-        self.assert_no_rows("SELECT * FROM v_transfer_integrity_violations")
+        self.assert_no_rows("SELECT * FROM transfer_integrity_violations")
         self.assert_no_rows("""
             SELECT t.TransactionID FROM BankTransaction t
             LEFT JOIN TransferDetails d USING(TransactionID)

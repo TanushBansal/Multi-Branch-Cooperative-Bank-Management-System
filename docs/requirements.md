@@ -82,7 +82,7 @@ demo's ability to enter a manager ID is not an authentication mechanism.
 | BE-02 | Enforce unique, correctly formatted IFSC values. Demonstrate branch creation, retrieval, update, and permitted deletion. |
 | BE-03 | Store employee name, contact information, and branch assignment. Every employee belongs to one existing branch. |
 | BE-04 | Represent Manager and Clerk as disjoint, partial specializations: an employee may be neither, but may not be both. |
-| BE-05 | Expose branch staffing and account/loan information through administrative queries or reporting views. |
+| BE-05 | Expose branch staffing and account/loan information through administrative and reporting queries. |
 
 ### 4.3 Transaction processing
 
@@ -196,7 +196,7 @@ presentation database and listens on the local loopback interface.
 | AD-02 | An ER/EER diagram showing specialization, many-to-many relationships, and account-dependent nominees as weak entities. |
 | AD-03 | Illustrative unnormalized design, functional dependencies, candidate keys, normalization through BCNF where applicable, and justification of exceptions. |
 | AD-04 | DDL with constraints, representative sample data, and basic CRUD demonstrations for customers, accounts, and branches. |
-| AD-05 | Working banking and loan workflows, reporting queries/views, and evidence of transactional integrity. |
+| AD-05 | Working banking and loan workflows, direct reporting queries, and evidence of transactional integrity. |
 | AD-06 | A documented concurrency anomaly and its resolution through locking or isolation levels, with actual execution evidence. |
 | AD-07 | An indexing experiment explaining relevant B+ Tree-based indexes and measured before/after performance. |
 | AD-08 | Query optimization case studies with equivalent query rewrites, execution-plan analysis, and measured results. |
@@ -230,7 +230,7 @@ writing this document. Detailed demo commands are in [demo-app/README.md](../dem
 | Representative data | `database/03_seed_data.sql` |
 | Financial operations | `database/04_transactions.sql` |
 | Loan workflow | `database/05_loans.sql`; demo integration in `demo-app/install_loans.py` |
-| Reporting | `database/06_views.sql`, `tests/report_views_checks.sql` |
+| Reporting | `database/06_reports.sql`, `tests/report_checks.sql` |
 | Indexing | `database/07_indexes.sql` and [timings and plans](../experiments/indexing/results.txt) |
 | Query optimization | [Original queries, rewrites, timings, and plans](../experiments/query_optimization/results.txt) |
 | Concurrency demonstration | `experiments/concurrency/` |
@@ -249,3 +249,5 @@ checks, so the smoke test checks for ledger and relationship violations.
 
 The [final report](report/final_report.md) summarizes the implemented design,
 verification, and measured results.
+
+Reports are evaluated as direct SELECT queries and statement-local CTEs.

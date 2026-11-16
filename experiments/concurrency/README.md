@@ -11,7 +11,7 @@ The production procedures in `database/04_transactions.sql` are not modified. Th
     10_lost_update_B.sql     Scenario 1, session B
     20_row_lock_A.sql        Scenario 2, session A (resolution with FOR UPDATE)
     20_row_lock_B.sql        Scenario 2, session B
-    99_verify.sql            Compares stored balance with the ledger for the demonstration accounts
+    verify.sql            Compares stored balance with the ledger for the demonstration accounts
 
 ## Preparation
 
@@ -28,7 +28,7 @@ Each scenario needs two sessions open at the same time. Open two terminal window
 
 Type the `SOURCE` command for session B in terminal B but do not press Enter yet. Then press Enter in terminal A, and within 15 seconds press Enter in terminal B. Session A deliberately waits 15 seconds between reading and writing the balance, which simulates processing time and gives B a window to run.
 
-After each scenario, run `SOURCE experiments/concurrency/99_verify.sql;` in either terminal.
+After each scenario, run `SOURCE experiments/concurrency/verify.sql;` in either terminal.
 
 ## Scenario 1: the anomaly
 
@@ -41,7 +41,7 @@ Expected outcome:
 
 - Session A reports BalanceReadBySession 10000.00 and BalanceWrittenBySession 9000.00.
 - Session B reports 10000.00 and 8000.00.
-- `99_verify.sql` shows a StoredBalance of 9000.00 but a LedgerBalance of 7000.00, so Difference is 2000.00. Both withdrawals are recorded as successful in the ledger, yet the account lost only one of them. The customer keeps 2000.00 that the ledger says was paid out.
+- `verify.sql` shows a StoredBalance of 9000.00 but a LedgerBalance of 7000.00, so Difference is 2000.00. Both withdrawals are recorded as successful in the ledger, yet the account lost only one of them. The customer keeps 2000.00 that the ledger says was paid out.
 
 This happens even at the default REPEATABLE READ isolation level, because the problem is not what each session can see. The update writes an absolute value computed from a stale read.
 
@@ -56,7 +56,7 @@ Expected outcome:
 
 - Session A reads 10000.00 and writes 9000.00.
 - Session B, after waiting, reads 9000.00 and writes 7000.00.
-- `99_verify.sql` shows StoredBalance 7000.00, LedgerBalance 7000.00 and Difference 0.00.
+- `verify.sql` shows StoredBalance 7000.00, LedgerBalance 7000.00 and Difference 0.00.
 
 The production Withdraw procedure uses this technique, and the automated tests `test_concurrent_withdrawals_cannot_overspend` and `test_concurrent_deposits_have_no_lost_updates` in `tests/test_transactions.py` exercise it.
 

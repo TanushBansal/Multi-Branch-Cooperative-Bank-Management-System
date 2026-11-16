@@ -1,7 +1,7 @@
 # Presentation demo
 
 A local, dependency-free web app: Python 3.9+ and your installed MySQL CLI.
-Banking and Loans have separate operation forms. Data explorer reads all 21 tables and 10 reporting/audit views,
+Banking and Loans have separate operation forms. Data explorer reads all 21 tables and 10 direct reports and audits,
 50 rows per page. Refresh highlights new rows and changed cells on a previously viewed page.
 Records stay visible until you refresh, so you can explain the before/after in your presentation.
 
@@ -15,7 +15,7 @@ python demo-app/setup_demo.py
 
 This creates **CooperativeBankDemo**, never replaces an existing database, and does
 not modify CooperativeBank or any project SQL file. It loads the schema, constraints,
-seed data, account opening, transactions, reporting views, and indexes. It installs
+seed data, account opening, transactions, and indexes. Reports run as direct queries. It installs
 the five loan procedures directly from 05_loans.sql without rewriting their bodies. On a setup failure it retains the new database for inspection.
 Use `--name AnotherDemoName` to create a fresh separate demonstration database.
 
@@ -27,7 +27,7 @@ python demo-app/install_loans.py --database CooperativeBankDemo
 
 Restart the server after changing its Python code, then reload the browser.
 The installer also adds LinkLoanGuarantor for linking an existing guarantor to an
-application. To refresh banking/loan routines, reporting views, and indexes together:
+application. To refresh banking/loan routines, direct reporting queries, and indexes together:
 
 ```powershell
 python demo-app/setup_demo.py --update --name CooperativeBankDemo
@@ -95,13 +95,13 @@ mysql -h 127.0.0.1 -u bank_demo -p CooperativeBankDemo -e "UPDATE Account SET Ba
 
 ## Presentation walkthrough
 
-1. Open Banking → Deposit money. View Account and note account 1001's balance.
+1. Open Banking → Deposit money. Inspect Account and note account 1001's balance.
 2. Enter account 1001, amount 500, channel BRANCH. A unique request ID is provided.
 3. Run operation, then Refresh. The changed balance is highlighted.
 4. Select BankTransaction to show the successful transaction and its returned ID.
 5. Transfer funds from 1001 to 2001, amount 250, channel ONLINE. For an inter-bank
    transfer use 1001 to 4001, amount 100; 4001 belongs to Pragati Cooperative Bank. Refresh Account;
-   view TransferDetails and BankTransaction to explain the atomic operation.
+   inspect TransferDetails and BankTransaction to explain the atomic operation.
 6. Open Loans → Apply for a loan. Use customer 1, branch 1, type PERSONAL,
    amount 10000, purpose Home renovation. Run and refresh LoanApplication to see PENDING.
 7. Select Link a guarantor: use the returned application ID and existing guarantor 1.
@@ -116,7 +116,7 @@ Approval requires a linked guarantor and a manager from the application's branch
 Review can also reject a pending application. Disbursement requires approval and an
 active account held by the applicant. Repayment requires generated installments.
 
-In the data explorer, choose Reports and audit views to inspect account/customer
+In the data explorer, choose Reports and audits to inspect account/customer
 statements, branch summaries, staffing, transaction history, loan portfolios, pending
 applications, or missing transfer details. Refresh loads the latest report values.
 
@@ -167,3 +167,10 @@ Open http://127.0.0.1:8081 for this separate demo.
 All participating bank accounts are stored in this one database; there is no
 external payment-network connection. After reinstalling procedures, reapply the
 restricted-user grants to the database you use for the presentation.
+
+Reports use the SELECT queries in `database/06_reports.sql`. To run one outside
+the app:
+
+```powershell
+python demo-app/reports.py transaction_history | mysql --login-path=local CooperativeBankMultiBankDemo
+```

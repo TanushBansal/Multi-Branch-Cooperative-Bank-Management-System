@@ -11,22 +11,11 @@ import subprocess
 import xml.etree.ElementTree as ET
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
+from reports import REPORTS, expand_sql
 
 ROOT = Path(__file__).resolve().parent
 TOKEN = secrets.token_urlsafe(32)
 TABLES = 'Bank Branch Employee Manager Clerk Customer Account AccountHolder Nominee SavingsAccount CurrentAccount FixedDeposit BankTransaction TransferDetails LoanApplication Guarantor ApplicationGuarantor Loan LoanInstallment Repayment PaymentAllocation'.split()
-VIEW_KEYS = {
-    'v_transfer_integrity_violations': ['TransactionID'],
-    'v_account_overview': ['AccountNo'],
-    'v_branch_account_summary': ['BranchID'],
-    'v_branch_staff': ['BranchID'],
-    'v_transaction_history': ['TransactionID'],
-    'v_account_statement': ['AccountNo', 'TransactionID'],
-    'v_customer_statement': ['CustomerID', 'AccountNo', 'TransactionID'],
-    'v_loan_portfolio': ['LoanID'],
-    'v_branch_loan_portfolio': ['BranchID'],
-    'v_pending_applications': ['ApplicationID'],
-}
 # Parameters are obtained from the installed routines, preserving their SQL order.
 OPERATIONS = {
     'Deposit': 'Banking', 'Withdraw': 'Banking', 'Transfer': 'Banking',
@@ -117,24 +106,32 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if parsed.path == '/api/config':
                 return self.send(200, {'token': TOKEN, 'operations': catalog(), 'tables': TABLES,
-                                      'views': list(VIEW_KEYS),
+                                      'reports': list(REPORTS),
                                       'database': rows('SELECT DATABASE() AS name')[0]['name']})
             if parsed.path == '/api/table':
                 params = parse_qs(parsed.query)
                 table = params.get('name', ['Account'])[0]
-                if table not in TABLES and table not in VIEW_KEYS:
+                if table not in TABLES and table not in REPORTS:
                     raise ValueError('Unknown table')
                 page = max(0, int(params.get('page', ['0'])[0]))
-                columns = rows('SHOW COLUMNS FROM `' + table + '`')
-                keys = VIEW_KEYS.get(table) or [c['Field'] for c in columns if c['Key'] == 'PRI']
+                if table in REPORTS:
+                    report = REPORTS[table]
+                    columns = report['columns']
+                    keys = report['keys']
+                    source = '(' + report['sql'] + ') AS report_data'
+                else:
+                    metadata = rows('SHOW COLUMNS FROM `' + table + '`')
+                    columns = [c['Field'] for c in metadata]
+                    keys = [c['Field'] for c in metadata if c['Key'] == 'PRI']
+                    source = '`' + table + '`'
                 order = (['AccountNo', 'TransactionDate', 'TransactionID']
-                         if table == 'v_account_statement' else
+                         if table == 'account_statement' else
                          ['CustomerID', 'AccountNo', 'TransactionDate', 'TransactionID']
-                         if table == 'v_customer_statement' else keys)
+                         if table == 'customer_statement' else keys)
                 ordering = ' ORDER BY ' + ','.join('`' + c + '`' for c in order) if order else ''
-                records = rows('SELECT * FROM `' + table + '`' + ordering + ' LIMIT 50 OFFSET ' + str(page * 50))
-                total = rows('SELECT COUNT(*) AS total FROM `' + table + '`')[0]['total']
-                return self.send(200, {'columns': [c['Field'] for c in columns],
+                records = rows('SELECT * FROM ' + source + ordering + ' LIMIT 50 OFFSET ' + str(page * 50))
+                total = rows('SELECT COUNT(*) AS total FROM ' + source)[0]['total']
+                return self.send(200, {'columns': columns,
                                       'keys': keys, 'rows': records, 'total': total})
             files = {'/': ('index.html', 'text/html'), '/app.js': ('app.js', 'text/javascript'), '/style.css': ('style.css', 'text/css')}
             if parsed.path not in files:

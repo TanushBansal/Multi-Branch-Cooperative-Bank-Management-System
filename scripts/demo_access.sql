@@ -4,7 +4,7 @@
 
 CREATE ROLE IF NOT EXISTS 'cooperative_demo_operator';
 
--- The explorer lists these objects. Invoker views also need underlying table reads.
+-- Direct reports and the explorer read these base tables.
 GRANT SELECT ON CooperativeBankDemo.Bank TO 'cooperative_demo_operator';
 GRANT SELECT ON CooperativeBankDemo.Branch TO 'cooperative_demo_operator';
 GRANT SELECT ON CooperativeBankDemo.Employee TO 'cooperative_demo_operator';
@@ -26,16 +26,6 @@ GRANT SELECT ON CooperativeBankDemo.Loan TO 'cooperative_demo_operator';
 GRANT SELECT ON CooperativeBankDemo.LoanInstallment TO 'cooperative_demo_operator';
 GRANT SELECT ON CooperativeBankDemo.Repayment TO 'cooperative_demo_operator';
 GRANT SELECT ON CooperativeBankDemo.PaymentAllocation TO 'cooperative_demo_operator';
-GRANT SELECT ON CooperativeBankDemo.v_transfer_integrity_violations TO 'cooperative_demo_operator';
-GRANT SELECT ON CooperativeBankDemo.v_account_overview TO 'cooperative_demo_operator';
-GRANT SELECT ON CooperativeBankDemo.v_branch_account_summary TO 'cooperative_demo_operator';
-GRANT SELECT ON CooperativeBankDemo.v_branch_staff TO 'cooperative_demo_operator';
-GRANT SELECT ON CooperativeBankDemo.v_transaction_history TO 'cooperative_demo_operator';
-GRANT SELECT ON CooperativeBankDemo.v_account_statement TO 'cooperative_demo_operator';
-GRANT SELECT ON CooperativeBankDemo.v_customer_statement TO 'cooperative_demo_operator';
-GRANT SELECT ON CooperativeBankDemo.v_loan_portfolio TO 'cooperative_demo_operator';
-GRANT SELECT ON CooperativeBankDemo.v_branch_loan_portfolio TO 'cooperative_demo_operator';
-GRANT SELECT ON CooperativeBankDemo.v_pending_applications TO 'cooperative_demo_operator';
 
--- The demo performs writes through stored procedures.
+
 GRANT EXECUTE ON CooperativeBankDemo.* TO 'cooperative_demo_operator';

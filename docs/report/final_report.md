@@ -37,11 +37,11 @@ The analysis identifies candidate keys and explains deliberate exceptions in the
 
 ## 4. Database implementation and demonstration
 
-The [schema](../../database/01_schema.sql) defines 21 base tables. The build adds sample data, 26 triggers, stored procedures, ten views and two explicit benchmark indexes. Primary, foreign and unique keys enforce identity and references. CHECK constraints guard domains and valid field combinations. Triggers enforce cross-record rules such as manager and branch agreement, approval with a linked guarantor, sanction amount within the request, and loan event chronology.
+The [schema](../../database/01_schema.sql) defines 21 base tables. The build adds sample data, 26 triggers, stored procedures, two explicit benchmark indexes; ten direct report queries are evaluated on demand. Primary, foreign and unique keys enforce identity and references. CHECK constraints guard domains and valid field combinations. Triggers enforce cross-record rules such as manager and branch agreement, approval with a linked guarantor, sanction amount within the request, and loan event chronology.
 
 The [CRUD walkthrough](crud_demo.sql) creates, reads and updates a customer, a branch and a savings account. The account moves from ACTIVE to FROZEN to CLOSED. The script rolls the account work back to a savepoint, deletes the now-unreferenced customer and branch, and rolls back at the end. The demonstration run reported one deletion for each parent record.
 
-The [reporting views](../../database/06_views.sql) include account and customer statements, branch account and staff summaries, loan portfolios, pending loan applications and a transfer audit. A successful transfer appears as a debit for the sender and a credit for the recipient. Pending and failed transactions remain visible in history and contribute zero to ledger balance.
+The [direct reporting queries](../../database/06_reports.sql) include account and customer statements, branch account and staff summaries, loan portfolios, pending loan applications and a transfer audit. A successful transfer appears as a debit for the sender and a credit for the recipient. Pending and failed transactions remain visible in history and contribute zero to ledger balance.
 
 ## 5. Transaction integrity and concurrency
 
@@ -83,10 +83,10 @@ The [demo application](../../demo-app/README.md) uses a separate seeded schema. 
 
 | Check | Recorded evidence |
 |---|---|
-| [Smoke test](../../tests/smoke_tests.sql) and [report assertions](../../tests/report_views_checks.sql) | Both returned empty sets after rebuilding the database. |
+| [Smoke test](../../tests/smoke_tests.sql) and [report assertions](../../tests/report_checks.sql) | Both returned empty sets after rebuilding the database. |
 | [Loan integration tests](../../tests/test_loans.py) | Three tests passed on MySQL 8.0.46 against the final loan routines, covering seeded funding, duplicate operations, repayment allocation and concurrency. |
 | [Demo unit tests](../../demo-app/test_server.py) | Five tests passed. |
-| [Demo HTTP integration](../../demo-app/check_integration.py) | The run reported PASS for 12 operations, 21 tables, ten views, both indexes, reporting checks, data-preserving updates, rollback and token protection. |
+| [Demo HTTP integration](../../demo-app/check_integration.py) | The run reported PASS for 12 operations, 21 tables, ten direct reports, both indexes, reporting checks, data-preserving updates, rollback and token protection. |
 
 ## 9. Scope boundaries
 

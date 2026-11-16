@@ -6,7 +6,7 @@ import install_loans
 
 
 def update_demo(name='CooperativeBankDemo'):
-    """Refresh routines/views and add missing indexes without replacing table data."""
+    """Refresh routines/reports and add missing indexes without replacing table data."""
     if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_]{0,63}', name):
         raise ValueError('Invalid demo database name')
     source = Path(__file__).resolve().parent.parent / 'database'
@@ -18,10 +18,6 @@ def update_demo(name='CooperativeBankDemo'):
                  'DROP PROCEDURE IF EXISTS Withdraw;\nDROP PROCEDURE IF EXISTS Transfer;\n'
                  + transactions)
     install_loans.install(name)
-    views = (source / '06_views.sql').read_text(encoding='utf-8-sig')
-    views = re.sub(r'USE CooperativeBank\s*;', 'USE `' + name + '`;', views, flags=re.I)
-    server.query(views)
-
     indexes = (source / '07_indexes.sql').read_text(encoding='utf-8-sig')
     indexes = re.sub(r'--[^\n]*', '', indexes)
     for statement in indexes.split(';'):
@@ -75,7 +71,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--name', default='CooperativeBankDemo')
     parser.add_argument('--password', action='store_true')
-    parser.add_argument('--update', action='store_true', help='Update routines, views, and indexes in an existing database; retain table data')
+    parser.add_argument('--update', action='store_true', help='Update routines, reports, and indexes in an existing database; retain table data')
     args = parser.parse_args()
     client = shutil.which('mysql') or r'C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe'
     server.MYSQL_ARGS = [client, '--login-path=local']

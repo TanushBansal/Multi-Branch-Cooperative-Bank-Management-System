@@ -1,6 +1,9 @@
-use CooperativeBank;
+-- Direct reporting queries for account, branch, transaction, and loan summaries.
+USE CooperativeBank;
 
-create or replace sql security invoker view v_transfer_integrity_violations as
+-- report: transfer_integrity_violations
+-- columns: TransactionID, Status, RequestID
+-- keys: TransactionID
 select t.TransactionID, t.Status, t.RequestID
 from BankTransaction t
 where t.TransactionType = 'TRANSFER'
@@ -8,7 +11,9 @@ where t.TransactionType = 'TRANSFER'
       select 1 from TransferDetails d where d.TransactionID = t.TransactionID
   );
 
-create or replace sql security invoker view v_account_overview as
+-- report: account_overview
+-- columns: AccountNo, AccountType, Status, Balance, OpenedOn, BranchID, BranchName, MinimumBalance, InterestRate, HolderCount, Holders
+-- keys: AccountNo
 select a.AccountNo,
        a.AccountType,
        a.Status,
@@ -31,7 +36,9 @@ group by a.AccountNo, a.AccountType, a.Status, a.Balance, a.OpenedOn,
          b.BranchID, b.BranchName,
          s.MinimumBalance, cu.MinimumBalance, s.InterestRate, f.InterestRate;
 
-create or replace sql security invoker view v_branch_account_summary as
+-- report: branch_account_summary
+-- columns: BranchID, BranchName, IFSC, TotalAccounts, SavingsAccounts, CurrentAccounts, FixedDeposits, ActiveAccounts, FrozenAccounts, ClosedAccounts, TotalBalance
+-- keys: BranchID
 select b.BranchID,
        b.BranchName,
        b.IFSC,
@@ -47,7 +54,9 @@ from Branch b
 left join Account a on a.BranchID = b.BranchID
 group by b.BranchID, b.BranchName, b.IFSC;
 
-create or replace sql security invoker view v_branch_staff as
+-- report: branch_staff
+-- columns: BranchID, BranchName, TotalEmployees, Managers, Clerks, ManagerNames
+-- keys: BranchID
 select b.BranchID,
        b.BranchName,
        count(e.EmployeeID) as TotalEmployees,
@@ -59,7 +68,9 @@ from Branch b
 left join Employee e on e.BranchID = b.BranchID
 group by b.BranchID, b.BranchName;
 
-create or replace sql security invoker view v_transaction_history as
+-- report: transaction_history
+-- columns: TransactionID, TransactionDate, TransactionType, Status, Channel, Amount, RequestID, SourceAccountNo, DestinationAccountNo, SourceBankID, SourceBankName, DestinationBankID, DestinationBankName, TransferScope
+-- keys: TransactionID
 select t.TransactionID,
        t.TransactionDate,
        t.TransactionType,
@@ -94,7 +105,9 @@ left join Branch tb on tb.BranchID = ta.BranchID
 left join Bank source_bank on source_bank.BankID = fb.BankID
 left join Bank destination_bank on destination_bank.BankID = tb.BankID;
 
-create or replace sql security invoker view v_account_statement as
+-- report: account_statement
+-- columns: AccountNo, TransactionID, TransactionDate, TransactionType, Channel, Status, CounterpartyAccountNo, Debit, Credit, RunningBalance
+-- keys: AccountNo, TransactionID
 select s.AccountNo,
        s.TransactionID,
        s.TransactionDate,
@@ -130,7 +143,45 @@ from (
     join TransferDetails d on d.TransactionID = t.TransactionID
 ) s;
 
-create or replace sql security invoker view v_customer_statement as
+-- report: customer_statement
+-- columns: CustomerID, CustomerName, AccountNo, TransactionID, TransactionDate, TransactionType, Channel, Status, CounterpartyAccountNo, Debit, Credit, RunningBalance
+-- keys: CustomerID, AccountNo, TransactionID
+WITH account_statement AS (
+select s.AccountNo,
+       s.TransactionID,
+       s.TransactionDate,
+       s.TransactionType,
+       s.Channel,
+       s.Status,
+       s.CounterpartyAccountNo,
+       s.Debit,
+       s.Credit,
+       sum(case when s.Status = 'SUCCESS' then s.Credit - s.Debit else 0 end)
+           over (partition by s.AccountNo
+                 order by s.TransactionDate, s.TransactionID
+                 rows between unbounded preceding and current row) as RunningBalance
+from (
+    select t.AccountNo, t.TransactionID, t.TransactionDate, t.TransactionType,
+           t.Channel, t.Status,
+           null as CounterpartyAccountNo,
+           case when t.TransactionType in ('WITHDRAWAL', 'LOAN_REPAYMENT')
+                then t.Amount else 0 end as Debit,
+           case when t.TransactionType in ('DEPOSIT', 'LOAN_DISBURSEMENT')
+                then t.Amount else 0 end as Credit
+    from BankTransaction t
+    where t.TransactionType <> 'TRANSFER'
+    union all
+    select d.FromAccountNo, t.TransactionID, t.TransactionDate, t.TransactionType,
+           t.Channel, t.Status, d.ToAccountNo, t.Amount, 0
+    from BankTransaction t
+    join TransferDetails d on d.TransactionID = t.TransactionID
+    union all
+    select d.ToAccountNo, t.TransactionID, t.TransactionDate, t.TransactionType,
+           t.Channel, t.Status, d.FromAccountNo, 0, t.Amount
+    from BankTransaction t
+    join TransferDetails d on d.TransactionID = t.TransactionID
+) s
+)
 select c.CustomerID,
        c.CustomerName,
        st.AccountNo,
@@ -145,9 +196,11 @@ select c.CustomerID,
        st.RunningBalance
 from Customer c
 join AccountHolder ah on ah.CustomerID = c.CustomerID
-join v_account_statement st on st.AccountNo = ah.AccountNo;
+join account_statement st on st.AccountNo = ah.AccountNo;
 
-create or replace sql security invoker view v_loan_portfolio as
+-- report: loan_portfolio
+-- columns: LoanID, ApplicationID, CustomerID, CustomerName, BranchID, BranchName, LoanType, SanctionDate, SanctionAmount, InterestRate, TenureMonths, Status, InstallmentsGenerated, ScheduledTotal, AmountRepaid, ScheduledOutstanding, OverdueAmount, NextUnpaidDueDate
+-- keys: LoanID
 with inst as (
     select i.LoanID,
            i.InstallmentID,
@@ -199,7 +252,61 @@ join Branch b on b.BranchID = la.BranchID
 left join sched s on s.LoanID = l.LoanID
 left join repaid r on r.LoanID = l.LoanID;
 
-create or replace sql security invoker view v_branch_loan_portfolio as
+-- report: branch_loan_portfolio
+-- columns: BranchID, BranchName, TotalLoans, Sanctioned, ActiveLoans, ClosedLoans, DefaultedLoans, TotalSanctionedAmount, TotalScheduledOutstanding, TotalOverdue, PendingApplications
+-- keys: BranchID
+WITH loan_portfolio AS (
+with inst as (
+    select i.LoanID,
+           i.InstallmentID,
+           i.DueDate,
+           i.PrincipalDue + i.InterestDue as AmountDue,
+           coalesce(sum(pa.AllocatedAmount), 0) as AmountPaid
+    from LoanInstallment i
+    left join PaymentAllocation pa on pa.InstallmentID = i.InstallmentID
+    group by i.LoanID, i.InstallmentID, i.DueDate, i.PrincipalDue, i.InterestDue
+),
+sched as (
+    select LoanID,
+           count(*) as InstallmentsGenerated,
+           sum(AmountDue) as ScheduledTotal,
+           sum(AmountPaid) as ScheduledPaid,
+           sum(case when DueDate < curdate() and AmountPaid < AmountDue
+                    then AmountDue - AmountPaid else 0 end) as OverdueAmount,
+           min(case when AmountPaid < AmountDue then DueDate end) as NextUnpaidDueDate
+    from inst
+    group by LoanID
+),
+repaid as (
+    select LoanID, sum(Amount) as AmountRepaid
+    from Repayment
+    group by LoanID
+)
+select l.LoanID,
+       la.ApplicationID,
+       c.CustomerID,
+       c.CustomerName,
+       la.BranchID,
+       b.BranchName,
+       la.LoanType,
+       l.SanctionDate,
+       l.SanctionAmount,
+       l.InterestRate,
+       l.TenureMonths,
+       l.Status,
+       coalesce(s.InstallmentsGenerated, 0) as InstallmentsGenerated,
+       coalesce(s.ScheduledTotal, 0) as ScheduledTotal,
+       coalesce(r.AmountRepaid, 0) as AmountRepaid,
+       coalesce(s.ScheduledTotal, 0) - coalesce(s.ScheduledPaid, 0) as ScheduledOutstanding,
+       coalesce(s.OverdueAmount, 0) as OverdueAmount,
+       s.NextUnpaidDueDate
+from Loan l
+join LoanApplication la on la.ApplicationID = l.ApplicationID
+join Customer c on c.CustomerID = la.CustomerID
+join Branch b on b.BranchID = la.BranchID
+left join sched s on s.LoanID = l.LoanID
+left join repaid r on r.LoanID = l.LoanID
+)
 select b.BranchID,
        b.BranchName,
        count(p.LoanID) as TotalLoans,
@@ -213,10 +320,12 @@ select b.BranchID,
        (select count(*) from LoanApplication x
         where x.BranchID = b.BranchID and x.Status = 'PENDING') as PendingApplications
 from Branch b
-left join v_loan_portfolio p on p.BranchID = b.BranchID
+left join loan_portfolio p on p.BranchID = b.BranchID
 group by b.BranchID, b.BranchName;
 
-create or replace sql security invoker view v_pending_applications as
+-- report: pending_applications
+-- columns: ApplicationID, ApplicationDate, BranchID, BranchName, CustomerID, CustomerName, LoanType, RequestedAmount, Purpose, GuarantorsLinked
+-- keys: ApplicationID
 select la.ApplicationID,
        la.ApplicationDate,
        la.BranchID,

@@ -1,7 +1,5 @@
 -- 00_setup.sql
--- Concurrency experiment: lost update and its resolutions.
--- Run once after building the database (files 01 to 04). Safe to rerun.
---
+-- Concurrency experiment:
 -- Creates two demonstration procedures that differ in exactly one clause,
 -- and helpers that open and restore two dedicated demonstration accounts.
 -- The production procedures in 04_transactions.sql are not modified.

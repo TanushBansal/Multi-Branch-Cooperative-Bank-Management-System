@@ -328,10 +328,10 @@ checks, not merely deleting columns.
 
 The following design choices avoid unnecessary stored totals:
 
-- A joint account's holder names are assembled by reporting views.
+- A joint account's holder names are assembled by direct reporting queries.
 - Installment paid amounts are derived from PaymentAllocation.
-- Scheduled outstanding and overdue amounts are computed by loan reporting views.
-- Branch account counts, balances, and loan totals are aggregated by views.
+- Scheduled outstanding and overdue amounts are computed by loan direct reporting queries.
+- Branch account counts, balances, and loan totals are aggregated by report queries.
 - Account statements calculate running balances from successful financial events.
 
 Account.Balance is intentionally stored as an operational summary of the ledger.

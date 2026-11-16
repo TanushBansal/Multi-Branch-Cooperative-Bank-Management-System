@@ -1,4 +1,4 @@
--- 99_verify.sql
+-- verify.sql
 -- Compares each demonstration account's stored balance with the balance
 -- implied by its successful transactions. Difference must be 0 for a
 -- healthy account. Run after each scenario, in any session.

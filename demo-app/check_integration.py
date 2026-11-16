@@ -30,16 +30,22 @@ try:
     assert sum(o['available'] for o in config['operations']) == 12
     for table in config['tables']:
         assert get('/api/table?name=' + table)['columns']
-    assert len(config['views']) == 10
-    for view in config['views']:
-        result = get('/api/table?name=' + view)
-        assert result['columns'] and result['keys'] == server.VIEW_KEYS[view]
-    statement = get('/api/table?name=v_customer_statement')
+    assert len(config['reports']) == 10
+    assert server.rows("SELECT COUNT(*) AS total FROM information_schema.TABLES "
+                       "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_TYPE<>'BASE TABLE'")[0]['total'] == '0'
+    for report in config['reports']:
+        result = get('/api/table?name=' + report)
+        assert result['columns'] and result['keys'] == server.REPORTS[report]['keys']
+        if result['rows']:
+            assert list(result['rows'][0]) == result['columns']
+    statement = get('/api/table?name=customer_statement')
     identities = [tuple(row[k] for k in statement['keys']) for row in statement['rows']]
     assert len(identities) == len(set(identities))
     snapshot = {table: server.rows('SELECT * FROM `' + table + '`') for table in config['tables']}
     setup_demo.update_demo(name)
     setup_demo.update_demo(name)
+    assert server.rows("SELECT COUNT(*) AS total FROM information_schema.TABLES "
+                       "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_TYPE<>'BASE TABLE'")[0]['total'] == '0'
     assert snapshot == {table: server.rows('SELECT * FROM `' + table + '`') for table in config['tables']}
     indexes = server.rows("SELECT DISTINCT INDEX_NAME FROM information_schema.STATISTICS "
                           "WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='BankTransaction' "
@@ -67,8 +73,8 @@ try:
     bank_before = server.rows('SELECT Balance FROM Account WHERE AccountNo=4001')[0]['Balance']
     operate('Transfer', ['1001', '4001', '100', 'ONLINE', 'web-cross-bank'])
     assert Decimal(server.rows('SELECT Balance FROM Account WHERE AccountNo=4001')[0]['Balance']) == Decimal(bank_before) + 100
-    scope = server.rows("SELECT TransferScope,SourceBankID,DestinationBankID FROM v_transaction_history "
-                        "WHERE RequestID='web-cross-bank'")[0]
+    scope = server.rows(server.expand_sql("SELECT TransferScope,SourceBankID,DestinationBankID FROM transaction_history "
+                        "WHERE RequestID='web-cross-bank'"))[0]
     assert scope == {'TransferScope': 'INTER_BANK', 'SourceBankID': '1', 'DestinationBankID': '2'}
     operate('OpenSavingsAccount', ['7001','1','1','2026-11-15','4','100','500','web-saving'])
     operate('OpenCurrentAccount', ['7002','1','1','2026-11-15','100','500','web-current'])
@@ -104,7 +110,7 @@ try:
     except HTTPError as error:
         assert error.code == 400
     assert server.rows('SELECT Balance FROM Account WHERE AccountNo=1001') == before
-    checks = (Path(__file__).resolve().parent.parent / 'tests' / 'report_views_checks.sql').read_text()
+    checks = (Path(__file__).resolve().parent.parent / 'tests' / 'report_checks.sql').read_text()
     checks = checks.replace('USE CooperativeBank;', 'USE `' + name + '`;')
     assert not any(server.query(checks)), 'Reporting checks found inconsistencies'
     try:
@@ -112,7 +118,7 @@ try:
         raise AssertionError('Missing token was accepted')
     except HTTPError as error:
         assert error.code == 403
-    print('PASS: 12 operations, 21 tables, 10 views, reporting checks, both indexes, repeatable updates preserving data, rollback, and token protection.')
+    print('PASS: 12 operations, 21 tables, 10 direct reports, reporting checks, both indexes, repeatable updates preserving data, rollback, and token protection.')
 finally:
     if httpd:
         httpd.shutdown()

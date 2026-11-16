@@ -1,7 +1,3 @@
--- 20_row_lock_A.sql  (SESSION A, scenario 2: resolution with a row lock)
--- Account 9100000002 starts at 10000.00.
--- Order: run this script in tab A, then IMMEDIATELY run 20_row_lock_B.sql
--- in tab B (within 15 seconds).
 
 USE CooperativeBank;
 CALL ConcurrencyDemoReset(9100000002);

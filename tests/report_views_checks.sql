@@ -1,5 +1,5 @@
 -- report_views_checks.sql
--- Self-checks for the reporting views in database/06_report_views.sql.
+-- Self-checks for the reporting views in database/06_views.sql.
 -- Each row returned describes a problem. An EMPTY result means every check passed.
 -- Run after building the database (files 01 to 04 and the views).
 

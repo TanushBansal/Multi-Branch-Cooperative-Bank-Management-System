@@ -47,7 +47,7 @@ class SeedDataTest(unittest.TestCase):
         cls.database = "cb_seed_test_" + uuid.uuid4().hex
         cls.execute("CREATE DATABASE " + cls.database, database=False)
         cls.addClassCleanup(cls.drop_database)
-        # Load the core build. The in-progress 05_loans.sql demo is separate from the seed fixture.
+        # Load the seed fixture. test_loans.py installs and tests the loan procedures separately.
         for path in sorted((ROOT / "database").glob("0[1-7]_*.sql")):
             if path.name != "05_loans.sql":
                 cls.execute(cls.load_file(path.name))

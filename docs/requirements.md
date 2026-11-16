@@ -192,7 +192,7 @@ presentation database and listens on the local loopback interface.
 | ID | Required deliverable |
 | --- | --- |
 | AD-01 | Requirements specification defining scope, functional expectations, and business rules. |
-| AD-02 | Consistent ER/EER and UML class diagrams, including specialization, many-to-many relationships, and account-dependent nominees as weak entities. |
+| AD-02 | An ER/EER diagram showing specialization, many-to-many relationships, and account-dependent nominees as weak entities. |
 | AD-03 | Illustrative unnormalized design, functional dependencies, candidate keys, normalization through BCNF where applicable, and justification of exceptions. |
 | AD-04 | DDL with constraints, representative sample data, and basic CRUD demonstrations for customers, accounts, and branches. |
 | AD-05 | Working banking and loan workflows, reporting queries/views, and evidence of transactional integrity. |
@@ -219,7 +219,7 @@ presentation database and listens on the local loopback interface.
 The scenarios describe completion criteria, not a record of tests executed while
 writing this document. Detailed demo commands are in [demo-app/README.md](../demo-app/README.md).
 
-## 9. Implementation mapping and outstanding qualifications
+## 9. Implementation and verification evidence
 
 | Requirements | Principal implementation location |
 | --- | --- |
@@ -230,16 +230,21 @@ writing this document. Detailed demo commands are in [demo-app/README.md](../dem
 | Financial operations | `database/04_transactions.sql` |
 | Loan workflow | `database/05_loans.sql`; demo integration in `demo-app/install_loans.py` |
 | Reporting | `database/06_views.sql`, `tests/report_views_checks.sql` |
-| Indexing deliverable | `database/07_indexes.sql` (transaction date and account/date indexes; measurements remain separate) |
+| Indexing | `database/07_indexes.sql` and [timings and plans](../experiments/indexing/results.txt) |
+| Query optimization | [Original queries, rewrites, timings, and plans](../experiments/query_optimization/results.txt) |
 | Concurrency demonstration | `experiments/concurrency/` |
 | Presentation interface | `demo-app/` |
 | Automated verification | `tests/`, `demo-app/test_server.py`, `demo-app/check_integration.py` |
 
-The demo installs the source loan procedures without compatibility rewrites and adds
-a guarantor-linking helper. Setup also installs reporting views and indexes; its
-update mode retains table data. Remaining implementation gaps, including unrestricted-DML
-integrity cases, CRUD demonstration coverage, and access grants for the full loan
-and reporting interface, must be assessed separately.
+The demo installs the source loan procedures and adds a guarantor-linking
+helper. Its update mode refreshes procedures, reports, and indexes while
+retaining table data.
 
-The UML diagram, measured indexing/query-optimization results, and final report are
-also separate deliverables. Listing their requirements here does not replace them.
+The [CRUD walkthrough](report/crud_demo.sql) demonstrates customer and branch
+deletion and account closure. The [restricted demo role](../scripts/demo_access.sql)
+allows table and report reads and procedure calls. The demo user cannot directly
+write to financial tables. Privileged administrative writes can bypass procedural
+checks, so the smoke test checks for ledger and relationship violations.
+
+The [final report](report/final_report.md) summarizes the implemented design,
+verification, and measured results.

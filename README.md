@@ -21,7 +21,7 @@ types, joint accounts, nominees, and loans at different lifecycle stages.
 
 ## Prerequisites
 
-- **MySQL Server 8.0.16+**, running locally with InnoDB support.
+- **MySQL Server 8.0.16+**, running locally with InnoDB support. The performance experiments require 8.0.18+ for EXPLAIN ANALYZE.
 - **MySQL command-line client** (`mysql`).
 - **Python 3.9+** for the demo server and automated tests.
 - A modern browser for the demo.
@@ -160,7 +160,7 @@ The integration check covers banking, the loan lifecycle through closure, reject
 operations, table/report endpoints, reporting consistency, installed indexes, and repeatable updates. It currently uses the standard MySQL 8.0 Windows
 client path and the `local` login path.
 
-Run the core schema, constraints, seed, and banking tests:
+Run the core schema, seed, banking, account-opening, and loan tests:
 
 ```powershell
 python -B -m unittest discover -s tests -p "test_*.py" -v
@@ -168,15 +168,24 @@ python -B -m unittest discover -s tests -p "test_*.py" -v
 
 Core tests use `mysql` on PATH, or the `MYSQL_TEST_CLIENT` executable path.
 Connection defaults are `127.0.0.1:3306`, user `root`. Override them with
-`MYSQL_TEST_HOST`, `MYSQL_TEST_PORT`, and `MYSQL_TEST_USER`. Credentials come from
-the client's login configuration or `MYSQL_PWD`. The seed suite excludes the raw
-loan file, so these tests do not establish that the full numbered build works.
+`MYSQL_TEST_HOST`, `MYSQL_TEST_PORT`, and `MYSQL_TEST_USER`. Supply the
+password through `MYSQL_PWD` when the client has no default credentials.
+The demo HTTP integration check uses the separate `local` login path.
+
+Account-opening tests need credentials that can grant privileges. The
+[loan suite](tests/test_loans.py) builds and tests `05_loans.sql` in a disposable
+database. Its concurrent repayment case reads MySQL's Performance Schema lock
+tables to coordinate the two sessions.
+
+After building `CooperativeBank`, run the two SQL checks. Both should return zero rows.
+
+```powershell
+mysql --login-path=local -e "source tests/smoke_tests.sql"
+mysql --login-path=local -e "source tests/report_views_checks.sql"
+```
 
 Additional checks:
 
-- [Reporting checks](tests/report_views_checks.sql) compare statements and summary
-  totals. The script targets `CooperativeBank`; select the intended database when
-  adapting it for the demo.
 - [Concurrency experiment](experiments/concurrency/README.md) provides two-session
   demonstrations of lost updates, row locking, and SERIALIZABLE isolation.
 - `node --check demo-app/app.js` checks JavaScript syntax if Node is installed.
@@ -197,8 +206,10 @@ database/
 demo-app/                     Frontend, Python server, setup, and tests
 docs/                         Proposal, problem statement, ER, and design documents
 experiments/concurrency/       Lost-update and locking/isolation demonstrations
-scripts/                      Bash build/reset helpers and account-access grants
-tests/                        Core integration tests and SQL reporting checks
+experiments/indexing/          Measured plans before and after adding indexes
+experiments/query_optimization/ SQL rewrites, measured plans, and result checks
+scripts/                      Bash build/reset helpers and access grants
+tests/                        Core integration tests, smoke tests, and reporting checks
 ```
 
 ## Design documents
@@ -208,17 +219,13 @@ tests/                        Core integration tests and SQL reporting checks
 - [Requirements specification](docs/requirements.md)
 - [ER diagram](docs/er/ER_Diagram.pdf)
 - [Normalization and functional dependencies](docs/normalization.md)
-- [Detailed demo instructions](demo-app/README.md)
+- [Final project report](docs/report/final_report.md)
+- [CRUD walkthrough](docs/report/crud_demo.sql)
+- [Indexing results](experiments/indexing/results.txt)
+- [Query optimization results](experiments/query_optimization/results.txt)
+- [Demo instructions and restricted-user setup](demo-app/README.md#restricted-demo-user)
 
-## Current limits and remaining work
-
-- Complete CRUD demonstrations, remaining integrity cases, and access grants for
-  the whole application. The existing `cooperative_account_operator` role covers
-  account/banking operations, not the full demo.
-- Update the ER diagram for nominees and add the UML class diagram.
-- Measure the performance impact of the implemented indexes and complete query-
-  optimization case studies. Index definitions exist; benchmark results are still needed.
-- Capture actual concurrency experiment outputs and assemble the final report.
+## Scope limits
 
 Ordinary deposits, withdrawals, and transfers support Savings and Current accounts.
 FD maturity and closure require a separate workflow. Loan approval requires a linked

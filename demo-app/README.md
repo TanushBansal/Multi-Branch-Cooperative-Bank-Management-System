@@ -49,6 +49,50 @@ Both commands use your saved MySQL `local` login path. If unavailable, add
 or sent to the browser. The server accepts `--port`, `--mysql`, and `--database`.
 Running without `--database` selects CooperativeBank, so use the command above for the demo.
 
+## Restricted demo user
+
+After creating the demo schema, use an administrator connection to install the
+role. For the default schema, open `mysql --login-path=local` from the repo root
+and run:
+
+```sql
+SOURCE scripts/demo_access.sql;
+```
+
+If your presentation uses `CooperativeBankDemo2`, apply the grants to that
+schema from PowerShell:
+
+```powershell
+(Get-Content -Raw .\scripts\demo_access.sql).Replace(
+    'CooperativeBankDemo', 'CooperativeBankDemo2'
+) | mysql --login-path=local
+```
+
+In the administrator's MySQL session, create the demo user if it does not already
+exist and keep the generated password for startup. Reuse your existing
+`bank_demo` account if it has the role.
+
+```sql
+CREATE USER 'bank_demo'@'localhost' IDENTIFIED BY RANDOM PASSWORD;
+GRANT 'cooperative_demo_operator' TO 'bank_demo'@'localhost';
+SET DEFAULT ROLE 'cooperative_demo_operator' TO 'bank_demo'@'localhost';
+```
+
+Start the app with the restricted user:
+
+```powershell
+python -B demo-app/server.py --database CooperativeBankDemo --user bank_demo --password
+```
+
+Replace `CooperativeBankDemo` with `CooperativeBankDemo2` in the startup and
+verification commands if you granted access to the second schema. Check that
+the app can read a report and post a deposit. The following verification
+command should return `UPDATE command denied`:
+
+```powershell
+mysql -h 127.0.0.1 -u bank_demo -p CooperativeBankDemo -e "UPDATE Account SET Balance = Balance WHERE 1 = 0;"
+```
+
 ## Presentation walkthrough
 
 1. Open Banking → Deposit money. View Account and note account 1001's balance.

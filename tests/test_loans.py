@@ -1,9 +1,4 @@
-"""Loan procedure integration tests. Run from the repo root with unittest discover.
-
-Uses the MYSQL_TEST_* and MYSQL_PWD settings used by the other database tests.
-The concurrent test also needs SELECT on performance_schema.data_locks and
-performance_schema.data_lock_waits to observe both sessions waiting.
-"""
+'Loan procedure integration tests. Run from the repo root with unittest discover.'
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
 import os
@@ -209,8 +204,6 @@ class LoanTests(unittest.TestCase):
             CALL RepayLoan({loan},3000);
         """
 
-        # Hold the payout account so the first session waits while holding the
-        # loan lock. Start the second only after the first has reached that wait.
         with ThreadPoolExecutor(max_workers=2) as workers:
             with subprocess.Popen(
                 self.client(), stdin=subprocess.PIPE, stdout=subprocess.PIPE,

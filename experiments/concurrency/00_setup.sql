@@ -1,8 +1,4 @@
--- 00_setup.sql
--- Concurrency experiment:
--- Creates two demonstration procedures that differ in exactly one clause,
--- and helpers that open and restore two dedicated demonstration accounts.
--- The production procedures in 04_transactions.sql are not modified.
+-- Unsafe and locked withdrawals demonstrate the lost-update problem.
 
 USE CooperativeBank;
 
@@ -12,9 +8,6 @@ DROP PROCEDURE IF EXISTS ConcurrencyDemoReset;
 
 DELIMITER $$
 
--- UNSAFE: reads the balance without locking, waits, then writes an absolute
--- value computed from what it read. If another session changes the balance
--- during the wait, that change is overwritten (lost update).
 CREATE PROCEDURE WithdrawUnsafe (
     IN p_AccountNo BIGINT,
     IN p_Amount DECIMAL(15,2),
@@ -33,7 +26,6 @@ BEGIN
 
     START TRANSACTION;
 
-    -- Step 1: read the balance (plain read, no lock)
     SELECT Balance INTO v_Balance
     FROM Account
     WHERE AccountNo = p_AccountNo;
@@ -45,10 +37,8 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Insufficient funds';
     END IF;
 
-    -- Simulated processing time between the read and the write
     DO SLEEP(p_DelaySeconds);
 
-    -- Step 2: write a value derived from the (possibly stale) read
     UPDATE Account
     SET Balance = v_Balance - p_Amount
     WHERE AccountNo = p_AccountNo;
@@ -69,9 +59,6 @@ BEGIN
            v_Balance - p_Amount  AS BalanceWrittenBySession;
 END$$
 
--- LOCKED: identical to WithdrawUnsafe except for FOR UPDATE on the read.
--- The row stays locked until COMMIT, so a concurrent withdrawal waits and
--- then reads the up-to-date balance.
 CREATE PROCEDURE WithdrawLocked (
     IN p_AccountNo BIGINT,
     IN p_Amount DECIMAL(15,2),
@@ -90,7 +77,6 @@ BEGIN
 
     START TRANSACTION;
 
-    -- Step 1: read the balance and lock the row (the only difference)
     SELECT Balance INTO v_Balance
     FROM Account
     WHERE AccountNo = p_AccountNo
@@ -125,10 +111,6 @@ BEGIN
            v_Balance - p_Amount  AS BalanceWrittenBySession;
 END$$
 
--- Opens the demonstration account if it does not exist (Current account,
--- branch 1, customer 1, opening deposit 10000.00, minimum balance 0), or
--- restores an existing one: demonstration withdrawals are removed and the
--- balance returns to 10000.00, so the account again matches its ledger.
 CREATE PROCEDURE ConcurrencyDemoReset (IN p_AccountNo BIGINT)
 BEGIN
     IF p_AccountNo NOT IN (9100000001, 9100000002) THEN

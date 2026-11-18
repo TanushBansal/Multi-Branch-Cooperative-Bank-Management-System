@@ -1,18 +1,7 @@
--- 05_loans.sql
--- Handles:
--- 1. Loan application
--- 2. Loan approval and rejection
--- 3. Loan disbursement
--- 4. EMI / installment generation
--- 5. Loan repayment
---
--- Run after:
--- 01_schema.sql
--- 02_constraints_triggers.sql
+-- Loan procedures own their transactions.
 
 USE CooperativeBank;
 
--- PROCEDURE 1: APPLY FOR A LOAN
 
 DROP PROCEDURE IF EXISTS ApplyLoan;
 
@@ -116,7 +105,6 @@ END $$
 DELIMITER ;
 
 
--- PROCEDURE 2: REVIEW A LOAN APPLICATION
 
 DROP PROCEDURE IF EXISTS ReviewLoan;
 
@@ -215,7 +203,6 @@ END $$
 DELIMITER ;
 
 
--- PROCEDURE 3: DISBURSE A LOAN
 
 DROP PROCEDURE IF EXISTS DisburseLoan;
 
@@ -259,7 +246,6 @@ BEGIN
     START TRANSACTION;
     SET v_started = TRUE;
 
-    -- Check application
 
     SELECT CustomerID, RequestedAmount, Status
     INTO v_customer_id, v_amount, v_status
@@ -277,7 +263,6 @@ BEGIN
         SET MESSAGE_TEXT = 'Loan application is not approved';
     END IF;
 
-    -- Existing sanctions keep their loan identity, payout account and terms.
 
     SELECT LoanID, Status, PayoutAccountNo, SanctionAmount, InterestRate, TenureMonths
     INTO v_loan_id, v_loan_status, v_sanctioned_account, v_sanctioned_amount,
@@ -291,7 +276,6 @@ BEGIN
         SET MESSAGE_TEXT = 'Loan has already been disbursed';
     END IF;
 
-    -- Validate interest rate and tenure
 
     IF p_interest_rate IS NULL OR p_interest_rate < 0 THEN
         SIGNAL SQLSTATE '45000'
@@ -314,7 +298,6 @@ BEGIN
         SET v_amount = v_sanctioned_amount;
     END IF;
 
-    -- Check payout account belongs to customer
 
     SELECT Balance, Status, AccountType
     INTO v_account_balance, v_account_status, v_account_type
@@ -344,7 +327,6 @@ BEGIN
         SET MESSAGE_TEXT = 'Disbursement would exceed the balance limit';
     END IF;
 
-    -- Create disbursement transaction
 
     INSERT INTO BankTransaction
     (
@@ -367,7 +349,6 @@ BEGIN
 
     SET v_transaction_id = LAST_INSERT_ID();
 
-    -- Credit customer account
 
     UPDATE Account
     SET Balance = Balance + v_amount
@@ -423,7 +404,6 @@ END $$
 
 DELIMITER ;
 
--- PROCEDURE 4: GENERATE LOAN INSTALLMENTS
 
 DROP PROCEDURE IF EXISTS GenerateInstallments;
 
@@ -463,7 +443,6 @@ BEGIN
     START TRANSACTION;
     SET v_started = TRUE;
 
-    -- Check loan
 
     SELECT COUNT(*)
     INTO v_count
@@ -497,7 +476,6 @@ BEGIN
         SET MESSAGE_TEXT = 'Loan is not active';
     END IF;
 
-    -- Check whether installments already exist
 
     SELECT COUNT(*)
     INTO v_count
@@ -511,7 +489,6 @@ BEGIN
 
     SET v_monthly_rate = v_rate / 1200;
 
-    -- Calculate EMI
 
     IF v_monthly_rate = 0 THEN
 
@@ -528,7 +505,6 @@ BEGIN
 
     SET v_balance = v_amount;
 
-    -- Generate monthly installments
 
     WHILE v_i <= v_tenure DO
 
@@ -575,7 +551,6 @@ END $$
 DELIMITER ;
 
 
--- PROCEDURE 5: REPAY A LOAN
 
 DROP PROCEDURE IF EXISTS RepayLoan;
 
@@ -622,7 +597,6 @@ BEGIN
     START TRANSACTION;
     SET v_started = TRUE;
 
-    -- Lock the loan before opening a consistent-read snapshot.
 
     SELECT PayoutAccountNo, Status
     INTO v_account_no, v_loan_status
@@ -640,7 +614,6 @@ BEGIN
         SET MESSAGE_TEXT = 'Loan is not active';
     END IF;
 
-    -- Calculate total outstanding amount
 
     SELECT
         COALESCE(
@@ -671,7 +644,6 @@ BEGIN
         SET MESSAGE_TEXT = 'Repayment exceeds outstanding amount';
     END IF;
 
-    -- Check account balance
 
     SELECT Balance, AccountType
     INTO v_balance, v_account_type
@@ -705,7 +677,6 @@ BEGIN
         SET MESSAGE_TEXT = 'Repayment would violate the account minimum balance';
     END IF;
 
-    -- Create repayment transaction
 
     INSERT INTO BankTransaction
     (
@@ -728,13 +699,11 @@ BEGIN
 
     SET v_transaction_id = LAST_INSERT_ID();
 
-    -- Debit customer account
 
     UPDATE Account
     SET Balance = Balance - p_amount
     WHERE AccountNo = v_account_no;
 
-    -- Create repayment record
 
     INSERT INTO Repayment
     (
@@ -753,7 +722,6 @@ BEGIN
 
     SET v_remaining = p_amount;
 
-    -- Allocate repayment to oldest installments first
 
     BEGIN
 
@@ -824,7 +792,6 @@ BEGIN
         SET MESSAGE_TEXT = 'Repayment could not be fully allocated';
     END IF;
 
-    -- Close loan if fully repaid
 
     SELECT
         COALESCE(

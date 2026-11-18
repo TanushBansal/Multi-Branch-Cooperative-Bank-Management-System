@@ -44,7 +44,6 @@ where t.TransactionType = 'TRANSFER'
 )
 
 
--- Each returned row describes a violation. Zero rows means all checks pass.
 SELECT 'Stored balance differs from successful ledger' AS Problem,
        a.AccountNo AS RecordID
 FROM Account a

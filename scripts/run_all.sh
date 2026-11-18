@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Runs the numbered SQL files in database/ in order.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 MYSQL_HOST="${MYSQL_HOST:-localhost}"

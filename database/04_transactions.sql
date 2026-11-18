@@ -38,8 +38,6 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'RequestID is required';
     END IF;
 
-    -- SET TRANSACTION rejects an already active transaction, avoiding an
-    -- implicit commit of the caller's work by START TRANSACTION.
     SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
     START TRANSACTION;
     SET v_Started = TRUE;

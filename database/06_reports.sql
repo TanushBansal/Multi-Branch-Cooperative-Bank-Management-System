@@ -1,6 +1,6 @@
+-- Report query order matches report_catalog.json.
 use CooperativeBank;
 
--- transfers missing details
 select t.TransactionID, t.Status, t.RequestID
 from BankTransaction t
 where t.TransactionType = 'TRANSFER'
@@ -8,7 +8,6 @@ where t.TransactionType = 'TRANSFER'
       select 1 from TransferDetails d where d.TransactionID = t.TransactionID
   );
 
--- account overview
 select a.AccountNo,
        a.AccountType,
        a.Status,
@@ -31,7 +30,6 @@ group by a.AccountNo, a.AccountType, a.Status, a.Balance, a.OpenedOn,
          b.BranchID, b.BranchName,
          s.MinimumBalance, cu.MinimumBalance, s.InterestRate, f.InterestRate;
 
--- branch account summary
 select b.BranchID,
        b.BranchName,
        b.IFSC,
@@ -47,7 +45,6 @@ from Branch b
 left join Account a on a.BranchID = b.BranchID
 group by b.BranchID, b.BranchName, b.IFSC;
 
--- branch staff
 select b.BranchID,
        b.BranchName,
        count(e.EmployeeID) as TotalEmployees,
@@ -59,7 +56,6 @@ from Branch b
 left join Employee e on e.BranchID = b.BranchID
 group by b.BranchID, b.BranchName;
 
--- transaction history
 select t.TransactionID,
        t.TransactionDate,
        t.TransactionType,
@@ -94,7 +90,6 @@ left join Branch tb on tb.BranchID = ta.BranchID
 left join Bank source_bank on source_bank.BankID = fb.BankID
 left join Bank destination_bank on destination_bank.BankID = tb.BankID;
 
--- account statement
 select s.AccountNo,
        s.TransactionID,
        s.TransactionDate,
@@ -130,7 +125,6 @@ from (
     join TransferDetails d on d.TransactionID = t.TransactionID
 ) s;
 
--- customer statement
 with account_statement as (
 select s.AccountNo,
        s.TransactionID,
@@ -183,7 +177,6 @@ from Customer c
 join AccountHolder ah on ah.CustomerID = c.CustomerID
 join account_statement st on st.AccountNo = ah.AccountNo;
 
--- loan portfolio
 with inst as (
     select i.LoanID,
            i.InstallmentID,
@@ -235,7 +228,6 @@ join Branch b on b.BranchID = la.BranchID
 left join sched s on s.LoanID = l.LoanID
 left join repaid r on r.LoanID = l.LoanID;
 
--- branch loan portfolio
 with loan_portfolio as (
 with inst as (
     select i.LoanID,
@@ -304,7 +296,6 @@ from Branch b
 left join loan_portfolio p on p.BranchID = b.BranchID
 group by b.BranchID, b.BranchName;
 
--- pending applications
 select la.ApplicationID,
        la.ApplicationDate,
        la.BranchID,

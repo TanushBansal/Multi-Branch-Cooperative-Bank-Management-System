@@ -1,9 +1,4 @@
-"""Validate demo data in a disposable database, using the real schema/triggers.
-
-Run: python -m unittest discover -s tests -p test_seed_data.py -v
-Uses the same MYSQL_TEST_CLIENT/HOST/PORT/USER and MYSQL_PWD settings as
-test_transactions.py. CooperativeBank is never modified by these tests.
-"""
+'Validate demo data in a disposable database, using the real schema/triggers.'
 
 from decimal import Decimal, ROUND_HALF_UP
 from concurrent.futures import ThreadPoolExecutor
@@ -52,7 +47,6 @@ class SeedDataTest(unittest.TestCase):
         cls.database = "cb_seed_test_" + uuid.uuid4().hex
         cls.execute("CREATE DATABASE " + cls.database, database=False)
         cls.addClassCleanup(cls.drop_database)
-        # Load the seed fixture. test_loans.py installs and tests the loan procedures separately.
         for path in sorted((ROOT / "database").glob("0[1-7]_*.sql")):
             if path.name not in ("05_loans.sql", "06_reports.sql"):
                 cls.execute(cls.load_file(path.name))
@@ -220,7 +214,6 @@ class SeedDataTest(unittest.TestCase):
         self.assertEqual(self.execute(snapshot), before)
 
     def test_disbursement_link_rejects_wrong_account_amount_type_and_status(self):
-        # These are unreferenced transactions, so uniqueness cannot mask a bad FK.
         for kind, status, account, amount in (
             ('DEPOSIT','SUCCESS',3002,30000),
             ('LOAN_DISBURSEMENT','FAILED',3002,30000),
@@ -387,7 +380,6 @@ class SeedDataTest(unittest.TestCase):
 
     def test_loan_rejects_pending_and_rejected_applications(self):
         for application in (5,6):
-            # These seed applications have no loans, so UNIQUE cannot mask a bad FK.
             sql = ("INSERT INTO Loan (ApplicationID,PayoutAccountNo,SanctionDate,SanctionAmount,InterestRate,TenureMonths) "
                    f"VALUES ({application},1001,'2026-11-15',1000,5,3)")
             result = self.run_sql(sql)
@@ -405,7 +397,6 @@ class SeedDataTest(unittest.TestCase):
             "UPDATE LoanApplication SET Status='PENDING',ReviewedBy=NULL,DecisionDate=NULL WHERE ApplicationID=3",
             "UPDATE LoanApplication SET Status='REJECTED' WHERE ApplicationID=3",
         ):
-            # The decision CHECK is satisfied; the composite loan FK blocks revocation.
             result = self.run_sql(sql)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('foreign key constraint fails', result.stderr)
@@ -413,7 +404,6 @@ class SeedDataTest(unittest.TestCase):
 
     def test_approved_application_accepts_loan_with_default_status(self):
         application = self.guarantor_application((1,), True)
-        # Roll back this additional loan so EMI/reporting seed expectations stay unchanged.
         result = self.execute("START TRANSACTION; "
             "INSERT INTO Loan (ApplicationID,PayoutAccountNo,SanctionDate,SanctionAmount,InterestRate,TenureMonths) "
             f"VALUES ({application},1001,'2026-11-15',1000,5,3); "
@@ -503,7 +493,6 @@ class SeedDataTest(unittest.TestCase):
             f"VALUES ({application},1001,'2026-11-15',1000.01,5,3)")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('cannot exceed the requested amount', result.stderr)
-        # Loan 3 is undisbursed, so its transaction-amount FK cannot mask the limit.
         self.reject_financial_change("UPDATE Loan SET SanctionAmount=30000.01 WHERE LoanID=3")
         self.reject_financial_change(f"UPDATE Loan SET ApplicationID={application} WHERE LoanID=3")
 
@@ -590,7 +579,6 @@ class SeedDataTest(unittest.TestCase):
 
     def test_allocated_parents_cannot_be_moved_to_another_loan(self):
         self.reject_financial_change("UPDATE Repayment SET LoanID=2 WHERE PaymentID=1")
-        # Avoid the existing UNIQUE(LoanID,InstallmentNo), so the new FK is tested.
         self.reject_financial_change("UPDATE LoanInstallment SET LoanID=2,InstallmentNo=99 WHERE InstallmentID=1")
 
     def test_repayments_and_allocations(self):

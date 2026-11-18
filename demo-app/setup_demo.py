@@ -10,7 +10,6 @@ def update_demo(name='CooperativeBankDemo'):
     if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_]{0,63}', name):
         raise ValueError('Invalid demo database name')
     source = Path(__file__).resolve().parent.parent / 'database'
-    # USE fails if the target does not exist; this path never creates or resets it.
     server.query('USE `' + name + '`;')
     transactions = (source / '04_transactions.sql').read_text(encoding='utf-8-sig')
     transactions = re.sub(r'USE CooperativeBank\s*;', 'USE `' + name + '`;', transactions, flags=re.I)
@@ -46,7 +45,6 @@ def create_demo(name='CooperativeBankDemo'):
     if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_]{0,63}', name):
         raise ValueError('Invalid demo database name')
     source = Path(__file__).resolve().parent.parent / 'database'
-    # Validate all routine definitions before creating the database.
     install_loans.procedure_definitions()
     server.query('CREATE DATABASE `' + name + '`;')
     try:

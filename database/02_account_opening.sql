@@ -1,8 +1,3 @@
--- Create accounts through these procedures using the restricted application role.
--- Each call creates the account, its subtype, and its first holder atomically.
--- Positive opening funds are recorded as a successful DEPOSIT; zero-funded
--- Savings/Current accounts are allowed only when MinimumBalance is zero.
--- Calls own their transactions and must run outside an existing transaction.
 
 USE CooperativeBank;
 

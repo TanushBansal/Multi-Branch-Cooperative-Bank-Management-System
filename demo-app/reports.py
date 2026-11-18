@@ -59,7 +59,6 @@ def load_reports(source=SOURCE, catalog=CATALOG):
     if len(queries) != len(metadata):
         raise ValueError(f'Expected {len(metadata)} report queries in {source}; found {len(queries)}')
     result = {}
-    # Catalog order matches the standalone SELECT/WITH statements in the SQL file.
     for report, sql in zip(metadata, queries):
         if not re.match(r'^(SELECT|WITH)\b', sql, re.I):
             raise ValueError('Report must be a SELECT or WITH query: ' + report['name'])
@@ -76,11 +75,7 @@ REPORTS = load_reports()
 
 
 def expand_sql(sql):
-    """Use report names as statement-local CTEs in developer SQL checks.
-
-    Only the fixed report catalog is expanded. This never creates database objects
-    and is not a parser for arbitrary SQL supplied by browser users.
-    """
+    'Use report names as statement-local CTEs in developer SQL checks.'
     pattern = r'\b(?:FROM|JOIN)\s+(' + '|'.join(REPORTS) + r')\b'
     if not re.search(pattern, sql, re.I):
         return sql

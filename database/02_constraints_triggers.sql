@@ -1,12 +1,7 @@
--- 02_constraints_triggers.sql
--- Additional constraints and triggers layered on top of 01_schema.sql.
--- Requires MySQL 8.0.16 or later.
+-- Cross-table integrity checks.
 
 USE CooperativeBank;
 
--- ---------------------------------------------------------------
--- A. Format checks on identifying information
--- ---------------------------------------------------------------
 
 ALTER TABLE Customer
     ADD CONSTRAINT chk_customer_pan
@@ -20,8 +15,6 @@ ALTER TABLE Branch
     ADD CONSTRAINT chk_branch_ifsc
     CHECK (REGEXP_LIKE(IFSC, '^[A-Z]{4}0[A-Z0-9]{6}$', 'c'));
 
--- A loan decision is recorded together or not at all: a pending
--- application has no reviewer and no decision date, a decided one has both.
 ALTER TABLE LoanApplication
     ADD CONSTRAINT chk_application_decision
     CHECK (
@@ -32,18 +25,7 @@ ALTER TABLE LoanApplication
 
 DELIMITER $$
 
--- ---------------------------------------------------------------
--- B. Employee specialization is disjoint and partial.
--- Composite foreign keys and fixed EmployeeRole checks in 01_schema.sql
--- enforce role matching on inserts and updates. An employee with no role
--- has EmployeeRole NULL and cannot appear in either subtype.
--- ---------------------------------------------------------------
 
--- ---------------------------------------------------------------
--- C. Account type cannot change after account creation.
--- Subtype matching is enforced for inserts and updates by composite foreign
--- keys and fixed AccountType checks in 01_schema.sql.
--- ---------------------------------------------------------------
 
 CREATE TRIGGER trg_account_type_immutable
 BEFORE UPDATE ON Account
@@ -55,17 +37,8 @@ BEGIN
     END IF;
 END$$
 
--- ---------------------------------------------------------------
--- D. A transfer detail row must belong to a TRANSFER transaction
--- ---------------------------------------------------------------
 
--- The composite foreign key and fixed TransactionType check in
--- 01_schema.sql enforce this on inserts, details updates, and parent updates.
 
--- ---------------------------------------------------------------
--- E. The reviewing manager must belong to the branch that received
---    the loan application
--- ---------------------------------------------------------------
 
 CREATE TRIGGER trg_application_reviewer_ins
 BEFORE INSERT ON LoanApplication
@@ -89,9 +62,6 @@ BEGIN
     END IF;
 END$$
 
--- Preserve total specialization after an account has been opened.
--- Account-opening procedures and restricted grants prevent missing subtype
--- rows at creation; these triggers protect existing subtype rows.
 
 CREATE TRIGGER trg_savingsaccount_keep_row
 BEFORE DELETE ON SavingsAccount
@@ -147,8 +117,6 @@ BEGIN
     END IF;
 END$$
 
--- Approval requires a guarantor. New applications start pending because the
--- child FK requires an application to exist before its guarantors can be linked.
 CREATE TRIGGER trg_application_guarantor_ins
 BEFORE INSERT ON LoanApplication
 FOR EACH ROW
@@ -174,8 +142,6 @@ BEGIN
             END IF;
             SET NEW.ApprovalGuarantorID = v_GuarantorID;
         END IF;
-        -- An explicit designation is validated by the composite FK, not by
-        -- a snapshot read. It must identify a live link on this application.
     ELSE
         SET NEW.ApprovalGuarantorID = NULL;
     END IF;
@@ -198,9 +164,6 @@ BEGIN
             SIGNAL SQLSTATE '45000'
                 SET MESSAGE_TEXT = 'Cannot remove the last guarantor of an approved application';
         END IF;
-        -- This FK update validates and locks the alternative link. Even if a
-        -- REPEATABLE READ snapshot selected a stale candidate, the FK rejects
-        -- it; a stale read can never leave an approved application unprotected.
         UPDATE LoanApplication SET ApprovalGuarantorID = v_OtherGuarantorID
         WHERE ApplicationID = OLD.ApplicationID;
     END IF;
@@ -230,7 +193,6 @@ BEGIN
     END IF;
 END$$
 
--- Keep transfer records and endpoints together after creation.
 CREATE TRIGGER trg_transferdetails_keep_row
 BEFORE DELETE ON TransferDetails
 FOR EACH ROW
@@ -250,9 +212,6 @@ BEGIN
     END IF;
 END$$
 
--- A sanction cannot exceed the amount requested by its application.
--- Current locking reads coordinate loan changes with application changes;
--- a deadlock aborts one transaction and the caller can retry it.
 
 CREATE TRIGGER trg_loan_requested_limit_insert
 BEFORE INSERT ON Loan

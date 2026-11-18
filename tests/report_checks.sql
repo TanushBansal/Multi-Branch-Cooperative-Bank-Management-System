@@ -1,7 +1,3 @@
--- report_checks.sql
--- Self-checks for the direct reporting queries in database/06_reports.sql.
--- Each row returned describes a problem. An EMPTY result means every check passed.
--- Run after building the database (files 01 to 04 and sample data).
 
 USE CooperativeBank;WITH account_statement AS (
 select s.AccountNo,
@@ -236,7 +232,6 @@ group by b.BranchID, b.BranchName
 )
 
 
--- 1. The last running balance on every account's statement must equal its stored balance.
 SELECT 'Statement running balance differs from stored balance' AS Problem,
        a.AccountNo AS Detail
 FROM Account a
@@ -249,7 +244,6 @@ LEFT JOIN (
 WHERE a.Balance <> COALESCE(x.RunningBalance, 0)
 
 UNION ALL
--- 2. Branch summary totals must add up to the whole bank.
 SELECT 'Branch summary balance total differs from Account table', NULL
 WHERE (SELECT COALESCE(SUM(TotalBalance), 0) FROM branch_account_summary)
    <> (SELECT COALESCE(SUM(Balance), 0) FROM Account)
@@ -260,7 +254,6 @@ WHERE (SELECT COALESCE(SUM(TotalAccounts), 0) FROM branch_account_summary)
    <> (SELECT COUNT(*) FROM Account)
 
 UNION ALL
--- 3. Each report must return exactly one row per base record.
 SELECT 'account_overview row count differs from Account', NULL
 WHERE (SELECT COUNT(*) FROM account_overview) <> (SELECT COUNT(*) FROM Account)
 
@@ -273,13 +266,11 @@ SELECT 'loan_portfolio row count differs from Loan', NULL
 WHERE (SELECT COUNT(*) FROM loan_portfolio) <> (SELECT COUNT(*) FROM Loan)
 
 UNION ALL
--- 4. Overdue amount can never exceed the outstanding scheduled amount.
 SELECT 'Overdue amount exceeds scheduled outstanding', LoanID
 FROM loan_portfolio
 WHERE OverdueAmount > ScheduledOutstanding
 
 UNION ALL
--- 5. Branch loan totals must add up to the loan portfolio.
 SELECT 'Branch loan total differs from loan portfolio', NULL
 WHERE (SELECT COALESCE(SUM(TotalSanctionedAmount), 0) FROM branch_loan_portfolio)
    <> (SELECT COALESCE(SUM(SanctionAmount), 0) FROM loan_portfolio);

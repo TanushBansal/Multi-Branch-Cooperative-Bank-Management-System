@@ -214,8 +214,6 @@ CREATE TABLE ApplicationGuarantor (
     FOREIGN KEY (GuarantorID) REFERENCES Guarantor(GuarantorID)
 );
 
--- An approved application designates one of its existing guarantor links.
--- Add this FK after the junction table because the relationship is circular.
 ALTER TABLE LoanApplication
     ADD FOREIGN KEY (ApplicationID, ApprovalGuarantorID)
         REFERENCES ApplicationGuarantor(ApplicationID, GuarantorID),

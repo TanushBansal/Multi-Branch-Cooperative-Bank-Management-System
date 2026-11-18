@@ -1,7 +1,4 @@
-"""Account-opening and privilege integration tests in a disposable database.
-Requires the MYSQL_TEST_* settings used by the other tests, plus CREATE USER/ROLE.
-Only randomly named test users/roles are created and removed.
-"""
+'Account-opening and privilege integration tests in a disposable database.'
 import os
 from pathlib import Path
 import subprocess

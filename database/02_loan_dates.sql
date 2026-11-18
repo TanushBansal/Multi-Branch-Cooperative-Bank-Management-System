@@ -1,7 +1,3 @@
--- Chronological integrity for loan events. Load after schema and other triggers.
--- DATE-only sanction/due fields use calendar-day comparisons. Repayment times
--- use full timestamps. Installments must be due AFTER the funding day.
--- No monthly calendar or EMI generation is performed here (separate workflow).
 USE CooperativeBank;
 
 DELIMITER $$
@@ -144,8 +140,6 @@ BEGIN
     END IF;
 END$$
 
--- Referenced financial timestamps are historical facts. Freeze them rather
--- than allow a later edit to invalidate linked funding/payment chronology.
 CREATE TRIGGER trg_loan_transaction_date_immutable
 BEFORE UPDATE ON BankTransaction
 FOR EACH ROW

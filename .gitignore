@@ -4,6 +4,10 @@ experiments/indexing/data/
 *.log
 *.tmp
 
+# Python bytecode
+__pycache__/
+*.pyc
+
 # Credentials and local config
 .env
 *.local.cnf

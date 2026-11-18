@@ -16,7 +16,6 @@ from reports import REPORTS, expand_sql
 ROOT = Path(__file__).resolve().parent
 TOKEN = secrets.token_urlsafe(32)
 TABLES = 'Bank Branch Employee Manager Clerk Customer Account AccountHolder Nominee SavingsAccount CurrentAccount FixedDeposit BankTransaction TransferDetails LoanApplication Guarantor ApplicationGuarantor Loan LoanInstallment Repayment PaymentAllocation'.split()
-# Parameters are obtained from the installed routines, preserving their SQL order.
 OPERATIONS = {
     'Deposit': 'Banking', 'Withdraw': 'Banking', 'Transfer': 'Banking',
     'OpenSavingsAccount': 'Banking', 'OpenCurrentAccount': 'Banking',
@@ -35,7 +34,7 @@ def literal(value):
 
 def query(sql):
     result = subprocess.run(MYSQL_ARGS, input=sql, text=True, encoding='utf-8',
-                            capture_output=True)  # Never retry a financial operation automatically.
+                            capture_output=True)
     if result.returncode:
         raise ValueError(result.stderr.strip())
     xml = re.sub(r'<\?xml[^>]*\?>', '', result.stdout)

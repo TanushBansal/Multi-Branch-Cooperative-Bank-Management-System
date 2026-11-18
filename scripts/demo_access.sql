@@ -1,10 +1,6 @@
--- Run as an administrator after setting up CooperativeBankDemo.
--- Assign this role to a dedicated demo user and make it the user's default role.
--- Rerun after reinstalling the demo procedures.
 
 CREATE ROLE IF NOT EXISTS 'cooperative_demo_operator';
 
--- Direct reports and the explorer read these base tables.
 GRANT SELECT ON CooperativeBankDemo.Bank TO 'cooperative_demo_operator';
 GRANT SELECT ON CooperativeBankDemo.Branch TO 'cooperative_demo_operator';
 GRANT SELECT ON CooperativeBankDemo.Employee TO 'cooperative_demo_operator';

@@ -55,7 +55,6 @@ INSERT INTO AccountHolder (CustomerID, AccountNo) VALUES
     (5, 2001), (6, 2002), (7, 2003), (8, 3001),
     (1, 3002), (5, 3002), (8, 3003), (9, 4001), (10, 4002);
 
--- NomineeNo is local to an account; account 1001 has two nominees.
 INSERT INTO Nominee (AccountNo, NomineeNo, NomineeName, Relationship, DateOfBirth, Phone, Address) VALUES
     (1001, 1, 'Nisha Mehta', 'Spouse', '1998-04-12', '9200000001', 'Karol Bagh, New Delhi'),
     (1001, 2, 'Raj Mehta', 'Father', '1968-08-20', '9200000002', 'Karol Bagh, New Delhi'),
@@ -116,8 +115,6 @@ INSERT INTO BankTransaction
     (29, NULL, '2026-11-15 10:00:00', 'TRANSFER', 200.00, 'ONLINE', 'PENDING', 'seed-pending-bank-transfer'),
     (30, NULL, '2026-11-14 12:00:00', 'TRANSFER', 999999.00, 'ONLINE', 'FAILED', 'seed-failed-bank-transfer');
 
--- Inter-bank examples 27 and 28 succeeded in opposite directions.
--- Pending 29 and failed 30 have no effect on account balances.
 INSERT INTO TransferDetails (TransactionID, FromAccountNo, ToAccountNo) VALUES
     (14, 1001, 2001), (15, 2001, 1002), (16, 1002, 1001),
     (23, 3002, 2001), (24, 1001, 2001),
@@ -143,7 +140,6 @@ INSERT INTO Guarantor (GuarantorID, GuarantorName, Phone, PAN, Address) VALUES
 INSERT INTO ApplicationGuarantor (ApplicationID, GuarantorID) VALUES
     (1, 1), (1, 2), (2, 2), (3, 3), (4, 4), (4, 1), (5, 1), (6, 2);
 
--- Guarantors must be linked before approval.
 UPDATE LoanApplication SET Status='APPROVED', ReviewedBy=1, DecisionDate='2026-08-28 10:00:00' WHERE ApplicationID=1;
 UPDATE LoanApplication SET Status='APPROVED', ReviewedBy=3, DecisionDate='2026-06-25 10:00:00' WHERE ApplicationID=2;
 UPDATE LoanApplication SET Status='APPROVED', ReviewedBy=5, DecisionDate='2026-11-05 10:00:00' WHERE ApplicationID=3;
@@ -158,10 +154,6 @@ INSERT INTO Loan
     (3, 3, 3002, '2026-11-06', 30000.00, 9.00, 6, 'SANCTIONED', NULL, NULL, NULL),
     (4, 4, 3001, '2026-05-01', 9000.00, 12.00, 3, 'DEFAULTED', 11, 'LOAN_DISBURSEMENT', 'SUCCESS');
 
--- Reducing-balance monthly EMI schedules; rates above are annual percentages.
--- Interest and principal are rounded to cents each month. The final
--- installment clears the remaining principal (loan 1 differs by one cent).
--- Loan 3 has not been disbursed, so its schedule is not generated yet.
 INSERT INTO LoanInstallment
     (InstallmentID, LoanID, InstallmentNo, DueDate, PrincipalDue, InterestDue) VALUES
     (1, 1, 1, '2026-10-01', 3960.27, 120.00),
@@ -179,8 +171,6 @@ INSERT INTO Repayment (PaymentID, LoanID, TransactionID, PaidAt, Amount) VALUES
     (2, 2, 19, '2026-10-01 11:00:00', 6000.00),
     (3, 1, 20, '2026-11-01 10:00:00', 2080.27);
 
--- A partial payment, one payment covering multiple installments, and
--- an installment settled across multiple payments are all demonstrated.
 INSERT INTO PaymentAllocation (PaymentID, InstallmentID, LoanID, AllocatedAmount) VALUES
     (1, 1, 1, 3000.00),
     (2, 4, 2, 2000.00), (2, 5, 2, 2000.00), (2, 6, 2, 2000.00),

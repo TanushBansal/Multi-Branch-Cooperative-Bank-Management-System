@@ -246,7 +246,7 @@ allows table and report reads and procedure calls. The demo user cannot directly
 write to financial tables. Privileged administrative writes can bypass procedural
 checks, so use the restricted role for normal demo operations.
 
-The [final report](report/final_report.md) summarizes the implemented design,
+The [final report](report/final_report.pdf) summarizes the implemented design,
 verification, and measured results.
 
 Reports are evaluated as direct SELECT queries and statement-local CTEs.

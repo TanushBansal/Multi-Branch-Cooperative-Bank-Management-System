@@ -4,6 +4,7 @@ A **CS257 Database and Information Systems Lab** project built with MySQL. The s
 manages customers, accounts, branches, employees, financial transactions, and loans
 across multiple banks. A local demo app lets you perform operations and refresh the
 database records to inspect the results.
+Github Link--https://github.com/TanushBansal/Multi-Branch-Cooperative-Bank-Management-System/tree/main
 
 ## Team and responsibilities
 
@@ -377,7 +378,7 @@ scripts/                    Build/reset scripts and database access grants
 - [Requirements specification](docs/requirements.md)
 - [ER diagram](docs/er/ER_Diagram.pdf)
 - [Normalization and functional dependencies](docs/normalization.md)
-- [Final report](docs/report/final_report.md)
+- [Final report](docs/report/final_report.pdf)
 - [Detailed demo guide](demo-app/README.md)
 
 The implemented workflows cover banks registered inside one shared database.

@@ -179,7 +179,7 @@ are already enforced against every possible table write.
 | NF-04 Access control | Application credentials should receive the reads and procedure execution needed for supported operations, with no unrestricted direct financial-table writes. Administrative imports are a separate access path. |
 | NF-05 Credential handling | The demo must keep database credentials server-side and avoid repeated password prompts during a presentation session. |
 | NF-06 Usability | Use separate Banking and Loans sections, labeled forms, visible validation errors, and a refreshable table explorer. Missing installed procedures must be visibly unavailable. |
-| NF-07 Reproducibility | Supply ordered build instructions, representative sample data, executable tests, and reproducible experiments. Destructive resets must be explicit. |
+| NF-07 Reproducibility | Supply ordered build instructions, representative sample data, a CRUD walkthrough, and reproducible experiments. Destructive resets must be explicit. |
 | NF-08 Performance evaluation | Measure query behavior on a documented dataset before and after indexing and query rewrites. Record timings and execution plans; no arbitrary response-time guarantee is assumed. |
 | NF-09 Maintainability | Keep schema, triggers, procedures, reporting, indexes, experiments, and documentation organized and readable. Document deliberate normalization exceptions. |
 
@@ -230,12 +230,11 @@ writing this document. Detailed demo commands are in [demo-app/README.md](../dem
 | Representative data | `database/03_seed_data.sql` |
 | Financial operations | `database/04_transactions.sql` |
 | Loan workflow | `database/05_loans.sql`; demo integration in `demo-app/install_loans.py` |
-| Reporting | `database/06_reports.sql`, `tests/report_checks.sql` |
+| Reporting | `database/06_reports.sql`, `demo-app/report_catalog.json` |
 | Indexing | `database/07_indexes.sql` and [timings and plans](../experiments/indexing/results.txt) |
 | Query optimization | [Original queries, rewrites, timings, and plans](../experiments/query_optimization/results.txt) |
 | Concurrency demonstration | `experiments/concurrency/` |
 | Presentation interface | `demo-app/` |
-| Automated verification | `tests/`, `demo-app/test_server.py`, `demo-app/check_integration.py` |
 
 The demo installs the source loan procedures and adds a guarantor-linking
 helper. Its update mode refreshes procedures, reports, and indexes while
@@ -245,7 +244,7 @@ The [CRUD walkthrough](report/crud_demo.sql) demonstrates customer and branch
 deletion and account closure. The [restricted demo role](../scripts/demo_access.sql)
 allows table and report reads and procedure calls. The demo user cannot directly
 write to financial tables. Privileged administrative writes can bypass procedural
-checks, so the smoke test checks for ledger and relationship violations.
+checks, so use the restricted role for normal demo operations.
 
 The [final report](report/final_report.md) summarizes the implemented design,
 verification, and measured results.

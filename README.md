@@ -1,4 +1,4 @@
-﻿# Multi-Branch Cooperative Bank Management System
+# Multi-Branch Cooperative Bank Management System
 
 A **CS257 Database and Information Systems Lab** project built with MySQL. The system
 manages customers, accounts, branches, employees, financial transactions, and loans
@@ -20,7 +20,6 @@ database records to inspect the results.
 - Deposits, withdrawals, and transfers within a branch, across branches, and across banks.
 - Loan applications, guarantor links, approval/rejection, disbursement, EMI schedules,
   repayment allocation, and loan closure.
-- Account/customer statements, branch summaries, transaction history, and loan reports.
 - Transaction rollback, row-level locking, and duplicate-request protection for banking operations.
 
 The schema has **21 base tables**. The seed dataset contains **two banks, four branches,
@@ -33,7 +32,7 @@ Accounts `4001` and `4002` belong to the second bank, Pragati Cooperative Bank.
 | --- | --- |
 | MySQL Server 8.0.16+ with InnoDB | Database, constraints, stored procedures, and transactions |
 | MySQL command-line tools | `mysql`, `mysql_config_editor`, and SQL script execution |
-| Python 3.9+ | Demo server, setup utilities, and automated tests |
+| Python 3.9+ | Demo server and setup utilities |
 | Modern browser | Demo frontend |
 | Bash / Git Bash | Optional shell build and reset scripts |
 
@@ -72,8 +71,7 @@ python -B demo-app/setup_demo.py
 
 This creates **CooperativeBankDemo**, installs tables, constraints, triggers, account
 opening, banking and loan procedures, and indexes, then loads the sample records.
-It also installs the guarantor-linking helper used by the frontend. Reports are
-computed directly from SQL queries.
+It also installs the guarantor-linking helper used by the frontend.
 
 Run setup only once for a given database name. It refuses to replace an existing
 database. If the demo is already built, start the server directly.
@@ -104,14 +102,14 @@ Browser form
     -> Python backend validates the operation and its parameters
     -> MySQL stored procedure performs the operation
     -> Backend returns the result or database error
-    -> Refresh reloads the selected table or report
+    -> Refresh reloads the selected table
 ```
 
 **Banking** contains account opening, deposits, withdrawals, and transfers.
 **Loans** contains the loan lifecycle operations. The Next button carries returned
 application/loan IDs into the following form; you still submit each operation yourself.
 
-The data explorer lists all tables and ten reports. It displays 50 rows per page.
+The data explorer lists all tables. It displays 50 rows per page.
 After an operation, press **Refresh** to inspect its effects. New rows and changed
 cells are highlighted on previously inspected pages.
 
@@ -140,7 +138,6 @@ SOURCE database/02_loan_dates.sql;
 SOURCE database/03_seed_data.sql;
 SOURCE database/04_transactions.sql;
 SOURCE database/05_loans.sql;
-SOURCE database/06_reports.sql;
 SOURCE database/07_indexes.sql;
 ```
 
@@ -153,7 +150,6 @@ SOURCE database/07_indexes.sql;
 | `03_seed_data.sql` | Inserts the demonstration records in dependency order |
 | `04_transactions.sql` | Creates deposit, withdrawal, and transfer procedures |
 | `05_loans.sql` | Creates the five loan lifecycle procedures |
-| `06_reports.sql` | Runs ten standalone reporting queries |
 | `07_indexes.sql` | Adds transaction-date and account/date indexes |
 
 These commands initialize a new database; they are not a migration for an existing
@@ -228,8 +224,7 @@ lock accounts in ascending account-number order to reduce deadlocks. An exceptio
 rolls back the balance changes, transaction entry, and transfer details together.
 
 Inter-bank transfers operate between registered banks inside the same MySQL database.
-The transaction report distinguishes `INTRA_BRANCH`, `INTER_BRANCH`, and `INTER_BANK`
-and displays both bank names. Account numbers are globally unique across these banks.
+Account numbers are globally unique across these banks.
 
 ## Loan lifecycle
 
@@ -258,16 +253,6 @@ EMIs use a reducing-balance calculation with an annual interest rate converted t
 monthly rate. Zero-interest schedules are supported, and the final principal component
 absorbs rounding. Partial repayment and payments spanning several installments are
 supported. Repayment preserves the payout account's minimum balance.
-
-### Suggested presentation sequence
-
-1. Note account `1001`'s balance, deposit `500`, and refresh Account and BankTransaction.
-2. Transfer `100` from `1001` to `4001`; inspect both balances and the transaction report.
-3. Apply for a loan using customer `1`, branch `1`, amount `10000`, and purpose `Home repair`.
-4. Link guarantor `1` to the returned application ID, then approve through manager `1`.
-5. Disburse that application to `1001`, with annual interest `12` and tenure `3` months.
-6. Generate installments using the returned LoanID, repay `500`, and inspect Repayment
-   and PaymentAllocation. Use the remaining scheduled amount to demonstrate closure.
 
 ## Constraints and triggers
 
@@ -367,48 +352,7 @@ Both rewrites were checked for identical result IDs. The second case showed a mo
 improvement with overlapping timing samples. The results files contain SQL, plans,
 and measurements; dataset-generation and automated benchmark runners are not included.
 
-## Reports
-
-Ten reports in [06_reports.sql](database/06_reports.sql) cover account overviews,
-branch balances/staffing, transaction history, account/customer statements, loan
-portfolios, pending applications, and transfer-integrity checks.
-
-They run as SELECT queries and statement-local CTEs. Names, columns, and row keys
-come from [report_catalog.json](demo-app/report_catalog.json), in query order.
-Include this catalog when sharing the project.
-
-To run one report directly from the terminal:
-
-```powershell
-python -B demo-app/reports.py transaction_history | mysql --login-path=local CooperativeBankDemo
-```
-
-## Verification
-
-```powershell
-python -B -m unittest discover -s tests -p "test_*.py" -v
-python -B -m unittest discover -s demo-app -p "test_*.py" -v
-python -B demo-app/check_integration.py
-```
-
-The core tests cover schema integrity, account opening, seed consistency, financial
-operations, loan workflows, rollback, and concurrent sessions. The demo tests cover
-the report loader and backend; the HTTP check exercises the operation and report
-endpoints. Database integration tests create and remove disposable schemas.
-
-Core tests need credentials with database create/drop privileges; account-access
-tests additionally create temporary users/roles. Set `MYSQL_TEST_CLIENT` if `mysql`
-is not on PATH, and `MYSQL_TEST_HOST`, `MYSQL_TEST_PORT`, or `MYSQL_TEST_USER` if needed.
-Supply credentials through `MYSQL_PWD` when the client has no default credentials.
-The HTTP integration check uses the `local` login path and the standard MySQL 8.0
-Windows executable path.
-
-After building the main database, these SQL checks should return zero rows:
-
-```powershell
-mysql --login-path=local --execute="source tests/smoke_tests.sql"
-mysql --login-path=local --execute="source tests/report_checks.sql"
-```
+## CRUD walkthrough
 
 The [CRUD walkthrough](docs/report/crud_demo.sql) demonstrates customer, branch, and
 account operations and rolls its record changes back. Run it against the seeded
@@ -417,14 +361,13 @@ account operations and rolls its record changes back. Run it against the seeded
 ## Repository structure
 
 ```text
-database/                   Schema, constraints, procedures, seed data, reports, indexes
-demo-app/                   Frontend, Python backend, setup tools, report catalog, tests
+database/                   Schema, constraints, procedures, seed data, indexes
+demo-app/                   Frontend, Python backend, setup tools
 docs/                       Proposal, requirements, ER diagram, normalization, final report
 experiments/concurrency/     Two-session anomaly and row-locking demonstration
 experiments/indexing/        Recorded index benchmark results
 experiments/query_optimization/ Recorded query-rewrite results
 scripts/                    Build/reset scripts and database access grants
-tests/                      Database integration tests and SQL consistency checks
 ```
 
 ## Documentation

@@ -58,7 +58,7 @@ Expected outcome:
 - Session B, after waiting, reads 9000.00 and writes 7000.00.
 - `verify.sql` shows StoredBalance 7000.00, LedgerBalance 7000.00 and Difference 0.00.
 
-The production Withdraw procedure uses this technique, and the automated tests `test_concurrent_withdrawals_cannot_overspend` and `test_concurrent_deposits_have_no_lost_updates` in `tests/test_transactions.py` exercise it.
+The production Withdraw procedure uses the same locking technique to prevent concurrent withdrawals from using a stale balance.
 
 ## Restoring the database
 

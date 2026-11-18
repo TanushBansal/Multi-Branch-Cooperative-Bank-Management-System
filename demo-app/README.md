@@ -1,7 +1,7 @@
 # Presentation demo
 
 A local, dependency-free web app: Python 3.9+ and your installed MySQL CLI.
-Banking and Loans have separate operation forms. Data explorer reads all 21 tables and 10 direct reports and audits,
+Banking and Loans have separate operation forms. The data explorer reads all 21 tables,
 50 rows per page. Refresh highlights new rows and changed cells on a previously viewed page.
 Records stay visible until you refresh, so you can explain the before/after in your presentation.
 
@@ -15,7 +15,7 @@ python demo-app/setup_demo.py
 
 This creates **CooperativeBankDemo**, never replaces an existing database, and does
 not modify CooperativeBank or any project SQL file. It loads the schema, constraints,
-seed data, account opening, transactions, and indexes. Reports run as direct queries. It installs
+seed data, account opening, transactions, and indexes. It installs
 the five loan procedures directly from 05_loans.sql without rewriting their bodies. On a setup failure it retains the new database for inspection.
 Use `--name AnotherDemoName` to create a fresh separate demonstration database.
 
@@ -27,7 +27,7 @@ python demo-app/install_loans.py --database CooperativeBankDemo
 
 Restart the server after changing its Python code, then reload the browser.
 The installer also adds LinkLoanGuarantor for linking an existing guarantor to an
-application. To refresh banking/loan routines, direct reporting queries, and indexes together:
+application. To refresh banking/loan routines and indexes together:
 
 ```powershell
 python demo-app/setup_demo.py --update --name CooperativeBankDemo
@@ -86,39 +86,18 @@ python -B demo-app/server.py --database CooperativeBankDemo --user bank_demo --p
 
 Replace `CooperativeBankDemo` with `CooperativeBankDemo2` in the startup and
 verification commands if you granted access to the second schema. Check that
-the app can read a report and post a deposit. The following verification
+the app can read a table and post a deposit. The following verification
 command should return `UPDATE command denied`:
 
 ```powershell
 mysql -h 127.0.0.1 -u bank_demo -p CooperativeBankDemo -e "UPDATE Account SET Balance = Balance WHERE 1 = 0;"
 ```
 
-## Presentation walkthrough
-
-1. Open Banking → Deposit money. Inspect Account and note account 1001's balance.
-2. Enter account 1001, amount 500, channel BRANCH. A unique request ID is provided.
-3. Run operation, then Refresh. The changed balance is highlighted.
-4. Select BankTransaction to show the successful transaction and its returned ID.
-5. Transfer funds from 1001 to 2001, amount 250, channel ONLINE. For an inter-bank
-   transfer use 1001 to 4001, amount 100; 4001 belongs to Pragati Cooperative Bank. Refresh Account;
-   inspect TransferDetails and BankTransaction to explain the atomic operation.
-6. Open Loans → Apply for a loan. Use customer 1, branch 1, type PERSONAL,
-   amount 10000, purpose Home renovation. Run and refresh LoanApplication to see PENDING.
-7. Select Link a guarantor: use the returned application ID and existing guarantor 1.
-8. Select Approve or reject application: use that application ID, manager 1, and Approve.
-9. Select Disburse a loan: use that application ID, account 1001, interest rate 12,
-   and tenure 3 months. Note the returned LoanID; refresh Loan and Account.
-10. Select Generate installments with that LoanID, then refresh LoanInstallment.
-11. Select Repay a loan with that LoanID and amount 500. Refresh Repayment,
-    PaymentAllocation, and Account. Repaying the remaining schedule balance closes the loan.
+## Operation requirements
 
 Approval requires a linked guarantor and a manager from the application's branch.
 Review can also reject a pending application. Disbursement requires approval and an
 active account held by the applicant. Repayment requires generated installments.
-
-In the data explorer, choose Reports and audits to inspect account/customer
-statements, branch summaries, staffing, transaction history, loan portfolios, pending
-applications, or missing transfer details. Refresh loads the latest report values.
 
 The three account-opening procedures are also supported. Use an unused account
 number, an existing branch/customer, and values satisfying your database constraints.
@@ -133,28 +112,14 @@ The HTTP write endpoint uses an unpredictable session token and checks the local
 Use the isolated demo database for presentation experiments. No external assets,
 Python packages, Node dependencies, or build step are required.
 
-## Checks
-
-```powershell
-python -B -m unittest discover -s demo-app -p "test_*.py" -v
-node --check demo-app/app.js
-```
-
-The real MySQL/HTTP integration check creates and removes its own disposable database:
-
-```powershell
-python -B demo-app/check_integration.py
-```
-
 ## Multi-bank sample data
 
 New demo databases contain Sahyog Cooperative Bank (three branches) and Pragati
 Cooperative Bank (Mumbai Central, accounts 4001 Savings and 4002 Current).
 Seed transactions 27 and 28 are successful inter-bank transfers in opposite
 directions; 29 is pending and 30 failed. Pending/failed examples do not move balances.
-The Transaction history report shows both banks and INTER_BANK scope.
 
-An update of an existing demo refreshes procedures/reports but does not append or
+An update of an existing demo refreshes procedures but does not append or
 reload seed records. For the complete new dataset without resetting existing work:
 
 ```powershell
@@ -167,17 +132,6 @@ Open http://127.0.0.1:8081 for this separate demo.
 All participating bank accounts are stored in this one database; there is no
 external payment-network connection. After reinstalling procedures, reapply the
 restricted-user grants to the database you use for the presentation.
-
-Reports use the SELECT queries in `database/06_reports.sql`. To run one outside
-the app:
-
-```powershell
-python demo-app/reports.py transaction_history | mysql --login-path=local CooperativeBankMultiBankDemo
-```
-
-Report names, columns, and row keys are defined in `demo-app/report_catalog.json`,
-in the same order as the SQL statements. Include both files when sharing a ZIP.
-SQL comments are optional and may be removed without breaking the loader.
 
 ## Approval and disbursement are separate stages
 
